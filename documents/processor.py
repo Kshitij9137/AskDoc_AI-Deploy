@@ -8,7 +8,7 @@ def process_document(document_id):
     Full document processing pipeline:
     Step 1 — Extract text from PDF page by page
     Step 2 — Save extracted text to ExtractedText model
-    Step 3 — Combine ALL pages then chunk together
+    Step 3 — Chunk all text into 300-500 word pieces
     Step 4 — Save chunks to DocumentChunk model
     Step 5 — Mark document as processed
     """
@@ -42,32 +42,32 @@ def process_document(document_id):
 
     print(f"Extracted {len(pages_data)} pages.")
 
-    # ── STEP 3 & 4: Combine all text then chunk ────────────
-    # Combine all pages into one big text first
-    full_text = '\n'.join([page['text'] for page in pages_data])
-
-    # Use smaller chunk size so short documents also get chunked
-    chunks = split_into_chunks(
-        full_text,
-        chunk_size=150,   # reduced from 400 to 150 words
-        overlap=20        # reduced overlap accordingly
-    )
-
+    # ── STEP 3 & 4: Chunk and save ─────────────────────────
     chunk_index = 0
-    for chunk_text in chunks:
-        # Skip very short chunks
-        if len(chunk_text.split()) < 10:
-            continue
 
-        # Figure out which page this chunk belongs to
-        # (use page 1 as default for combined text)
-        DocumentChunk.objects.create(
-            document=document,
-            chunk_index=chunk_index,
-            text=chunk_text,
-            page_number=1
+    for page in pages_data:
+        page_text = page['text']
+        page_number = page['page_number']
+
+        # Split this page's text into chunks
+        chunks = split_into_chunks(
+            page_text,
+            chunk_size=400,
+            overlap=50
         )
-        chunk_index += 1
+
+        for chunk_text in chunks:
+            # Skip very short chunks (less than 20 words)
+            if len(chunk_text.split()) < 20:
+                continue
+
+            DocumentChunk.objects.create(
+                document=document,
+                chunk_index=chunk_index,
+                text=chunk_text,
+                page_number=page_number
+            )
+            chunk_index += 1
 
     print(f"Created {chunk_index} chunks for: {document.title}")
 

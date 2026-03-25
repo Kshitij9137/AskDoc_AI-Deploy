@@ -139,3 +139,38 @@ class DocumentChunksView(APIView):
             'total_chunks': chunks.count(),
             'chunks': data
         })
+
+class DocumentChunksView(APIView):
+    """Preview chunks created from a document (for debugging)"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            document = Document.objects.get(
+                id=pk,
+                owner=request.user
+            )
+        except Document.DoesNotExist:
+            return Response(
+                {'error': 'Document not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        from .models import DocumentChunk
+        chunks = DocumentChunk.objects.filter(document=document)
+
+        data = [
+            {
+                'chunk_index': chunk.chunk_index,
+                'page_number': chunk.page_number,
+                'word_count': len(chunk.text.split()),
+                'preview': chunk.text[:200] + '...'
+            }
+            for chunk in chunks
+        ]
+
+        return Response({
+            'document': document.title,
+            'total_chunks': chunks.count(),
+            'chunks': data
+        })

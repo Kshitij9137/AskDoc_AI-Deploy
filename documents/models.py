@@ -52,3 +52,16 @@ class DocumentChunk(models.Model):
 
     def __str__(self):
         return f"Chunk {self.chunk_index} of {self.document.title}"
+    
+
+class ChunkEmbedding(models.Model):
+    """Stores the vector embedding for each document chunk"""
+    chunk = models.OneToOneField(
+        DocumentChunk,
+        on_delete=models.CASCADE,
+        related_name='embedding'
+    )
+    embedding_vector = models.TextField()  # stored as JSON string
+
+    def __str__(self):
+        return f"Embedding for chunk {self.chunk.chunk_index} of {self.chunk.document.title}"

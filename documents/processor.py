@@ -10,7 +10,8 @@ def process_document(document_id):
     Step 2 — Save extracted text to ExtractedText model
     Step 3 — Chunk all text into 300-500 word pieces
     Step 4 — Save chunks to DocumentChunk model
-    Step 5 — Mark document as processed
+    Step 5 — Generate embeddings for all chunks
+    Step 6 — Mark document as processed
     """
     try:
         document = Document.objects.get(id=document_id)
@@ -49,7 +50,6 @@ def process_document(document_id):
         page_text = page['text']
         page_number = page['page_number']
 
-        # Split this page's text into chunks
         chunks = split_into_chunks(
             page_text,
             chunk_size=400,
@@ -57,7 +57,6 @@ def process_document(document_id):
         )
 
         for chunk_text in chunks:
-            # Skip very short chunks (less than 20 words)
             if len(chunk_text.split()) < 20:
                 continue
 
@@ -69,9 +68,13 @@ def process_document(document_id):
             )
             chunk_index += 1
 
-    print(f"Created {chunk_index} chunks for: {document.title}")
+    print(f"Created {chunk_index} chunks.")
 
-    # ── STEP 5: Mark as processed ──────────────────────────
+    # ── STEP 5: Generate embeddings ────────────────────────
+    from .embedder import generate_embeddings_for_document
+    generate_embeddings_for_document(document_id)
+
+    # ── STEP 6: Mark as processed ──────────────────────────
     document.is_processed = True
     document.save()
 

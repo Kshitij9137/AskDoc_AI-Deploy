@@ -19,3 +19,10 @@ class ExtractedTextAdmin(admin.ModelAdmin):
 class DocumentChunkAdmin(admin.ModelAdmin):
     list_display = ('document', 'chunk_index', 'page_number')
     search_fields = ('document__title',)
+
+
+from .models import ChunkEmbedding
+
+@admin.register(ChunkEmbedding)
+class ChunkEmbeddingAdmin(admin.ModelAdmin):
+    list_display = ('chunk', )

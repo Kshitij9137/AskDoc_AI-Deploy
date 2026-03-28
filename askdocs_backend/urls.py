@@ -26,4 +26,3 @@ urlpatterns = [
     path('api/qa/', include('qa_engine.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
-

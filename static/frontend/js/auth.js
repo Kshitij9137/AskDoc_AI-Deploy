@@ -39,7 +39,7 @@ if (window.location.pathname.includes('login') ||
     window.location.pathname.includes('register')) {
     const token = localStorage.getItem('access_token');
     if (token) {
-        window.location.href = 'index.html';
+        window.location.href = '/app';
     }
 }
 
@@ -74,7 +74,7 @@ async function handleLogin() {
             localStorage.setItem('username', username);
 
             // Redirect to main app
-            window.location.href = 'index.html';
+            window.location.href = '/app';
         } else {
             showError(data.detail || 'Invalid username or password.');
         }
@@ -119,7 +119,7 @@ async function handleRegister() {
         if (response.ok) {
             showSuccess('Account created! Redirecting to login...');
             setTimeout(() => {
-                window.location.href = 'login.html';
+                window.location.href = '/login';
             }, 1500);
         } else {
             // Show first error message from API

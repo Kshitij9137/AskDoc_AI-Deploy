@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AskDocs AI</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+
+<!-- Auth Guard: redirect to login if not logged in -->
+<div id="app" style="display:none; width:100%; height:100vh;">
+
+    <!-- ── SIDEBAR ─────────────────────────────── -->
+    <aside class="sidebar" id="sidebar">
+
+        <!-- Logo -->
+        <div class="sidebar-logo">
+            <span class="logo-icon">🧠</span>
+            <span class="logo-text">AskDocs AI</span>
+        </div>
+
+        <!-- Upload Button -->
+        <button class="upload-btn" onclick="openUploadModal()">
+            <span>+</span> Upload Document
+        </button>
+
+        <!-- Documents List -->
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">📄 Documents</div>
+            <div class="doc-list" id="docList">
+                <div class="empty-state-small">No documents yet</div>
+            </div>
+        </div>
+
+        <!-- Chat History -->
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">🕐 Recent Questions</div>
+            <div class="history-list" id="historyList">
+                <div class="empty-state-small">No history yet</div>
+            </div>
+        </div>
+
+        <!-- Sidebar Footer -->
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <div class="user-avatar" id="userAvatar">K</div>
+                <span class="username" id="usernameDisplay">User</span>
+            </div>
+            <button class="logout-btn" onclick="handleLogout()">
+                Logout
+            </button>
+        </div>
+
+    </aside>
+
+    <!-- ── MAIN CONTENT ────────────────────────── -->
+    <main class="main-content">
+
+        <!-- Top Bar -->
+        <div class="topbar">
+            <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+            <h2 class="topbar-title">Chat with your Documents</h2>
+            <div class="topbar-right">
+                <span class="status-dot"></span>
+                <span class="status-text">AI Ready</span>
+            </div>
+        </div>
+
+        <!-- Chat Area -->
+        <div class="chat-area" id="chatArea">
+
+            <!-- Welcome Message -->
+            <div class="welcome-screen" id="welcomeScreen">
+                <div class="welcome-icon">🧠</div>
+                <h2>Welcome to AskDocs AI</h2>
+                <p>Upload a PDF document and start asking questions.<br>
+                The AI will find relevant answers with source references.</p>
+                <div class="welcome-tips">
+                    <div class="tip">📤 Upload a PDF from the sidebar</div>
+                    <div class="tip">💬 Ask any question about your document</div>
+                    <div class="tip">📌 Get answers with page references</div>
+                </div>
+            </div>
+
+            <!-- Messages will appear here -->
+            <div class="messages-container" id="messagesContainer"></div>
+
+        </div>
+
+        <!-- Input Area -->
+        <div class="input-area">
+            <div class="input-wrapper">
+                <textarea
+                    id="questionInput"
+                    placeholder="Ask a question about your documents..."
+                    rows="1"
+                    onkeydown="handleKeyDown(event)"
+                    oninput="autoResize(this)"
+                ></textarea>
+                <button
+                    class="send-btn"
+                    id="sendBtn"
+                    onclick="sendQuestion()"
+                >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                        <path d="M22 2L11 13" stroke="white" stroke-width="2"
+                              stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="white"
+                              stroke-width="2" stroke-linecap="round"
+                              stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="input-hint">Press Enter to send · Shift+Enter for new line</div>
+        </div>
+
+    </main>
+
+</div>
+
+<!-- ── UPLOAD MODAL ────────────────────────────── -->
+<div class="modal-overlay" id="uploadModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Upload Document</h3>
+            <button class="modal-close" onclick="closeUploadModal()">×</button>
+        </div>
+
+        <div class="modal-body">
+            <!-- Drop Zone -->
+            <div class="drop-zone" id="dropZone" onclick="triggerFileInput()">
+                <div class="drop-icon">📄</div>
+                <p class="drop-text">Click to choose a PDF file</p>
+                <p class="drop-hint">Supported format: PDF only · Max 10MB</p>
+                <input type="file" id="fileInput" accept=".pdf"
+                       style="display:none" onchange="handleFileSelect(event)"/>
+            </div>
+
+            <!-- Selected File Info -->
+            <div class="file-info" id="fileInfo" style="display:none">
+                <span class="file-icon">📄</span>
+                <div class="file-details">
+                    <span class="file-name" id="fileName"></span>
+                    <span class="file-size" id="fileSize"></span>
+                </div>
+                <button class="file-remove" onclick="removeFile()">×</button>
+            </div>
+
+            <!-- Title Input -->
+            <div class="form-group" id="titleGroup" style="display:none">
+                <label>Document Title (optional)</label>
+                <input type="text" id="docTitle"
+                       placeholder="Leave blank to use filename"/>
+            </div>
+
+            <!-- Progress -->
+            <div class="upload-progress" id="uploadProgress" style="display:none">
+                <div class="progress-step" id="step1">
+                    <span class="step-icon">⏳</span>
+                    <span>Uploading file...</span>
+                </div>
+                <div class="progress-step" id="step2">
+                    <span class="step-icon">⏳</span>
+                    <span>Extracting text...</span>
+                </div>
+                <div class="progress-step" id="step3">
+                    <span class="step-icon">⏳</span>
+                    <span>Generating embeddings...</span>
+                </div>
+                <div class="progress-step" id="step4">
+                    <span class="step-icon">⏳</span>
+                    <span>Building search index...</span>
+                </div>
+            </div>
+
+            <!-- Error/Success in modal -->
+            <div class="error-msg" id="uploadError"></div>
+            <div class="success-msg" id="uploadSuccess"></div>
+        </div>
+
+        <div class="modal-footer">
+            <button class="btn-secondary" onclick="closeUploadModal()">
+                Cancel
+            </button>
+            <button class="btn-primary" id="uploadBtn"
+                    onclick="uploadDocument()" style="width:auto; padding: 12px 28px;">
+                Upload
+            </button>
+        </div>
+    </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/js/app.js"></script>
+
+</body>
+</html>

@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AskDocs AI — Register</title>
-    <link rel="stylesheet" href="css/style.css">
+    <title>AskDocs AI — Login</title>
+    <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
 
@@ -17,28 +17,19 @@
             <p>AI-Powered Document Intelligence</p>
         </div>
 
-        <h2>Create Account</h2>
+        <h2>Welcome Back</h2>
 
-        <!-- Messages -->
+        <!-- Error Message -->
         <div class="error-msg" id="errorMsg"></div>
-        <div class="success-msg" id="successMsg"></div>
 
-        <!-- Register Form -->
+        <!-- Login Form -->
         <div class="form-group">
             <label for="username">Username</label>
             <input
                 type="text"
                 id="username"
-                placeholder="Choose a username"
-            />
-        </div>
-
-        <div class="form-group">
-            <label for="email">Email</label>
-            <input
-                type="email"
-                id="email"
-                placeholder="Enter your email"
+                placeholder="Enter your username"
+                autocomplete="username"
             />
         </div>
 
@@ -47,23 +38,24 @@
             <input
                 type="password"
                 id="password"
-                placeholder="Min 8 characters"
+                placeholder="Enter your password"
+                autocomplete="current-password"
             />
         </div>
 
-        <button class="btn-primary" id="registerBtn" onclick="handleRegister()">
-            Create Account
+        <button class="btn-primary" id="loginBtn" onclick="handleLogin()">
+            Login
         </button>
 
         <div class="auth-footer">
-            Already have an account?
-            <a href="login.html">Login here</a>
+            Don't have an account?
+            <a href="register.html">Register here</a>
         </div>
 
     </div>
 </div>
 
-<script src="js/auth.js"></script>
+<script src="/js/auth.js"></script>
 
 </body>
 </html>

@@ -175,3 +175,7 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 10,
 }
 CORS_ALLOW_ALL_ORIGINS = True  # only for development
+
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',
+]

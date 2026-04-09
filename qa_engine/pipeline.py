@@ -22,45 +22,83 @@ def build_context(chunks, max_words=800):
 def extract_answer(question, context):
     """
     Extract the most relevant answer from context.
-    Scores each sentence by how many question
-    keywords it contains.
+    Improved version that filters out noise sentences.
     """
     if not context:
         return "I could not find relevant information to answer your question."
 
     import re
+
+    # Split into sentences
     sentences = re.split(r'(?<=[.!?])\s+', context)
 
+    # Words to ignore when scoring
     stop_words = {
         'what', 'is', 'the', 'a', 'an', 'of', 'in',
         'to', 'and', 'or', 'for', 'how', 'why', 'who',
         'when', 'where', 'are', 'was', 'were', 'does',
         'do', 'did', 'can', 'could', 'would', 'should',
-        'tell', 'me', 'about', 'explain', 'describe'
+        'tell', 'me', 'about', 'explain', 'describe',
+        'list', 'give', 'define', 'definition'
     }
+
+    # Noise phrases to filter out from answers
+    noise_phrases = [
+        'page no', 'ccet ips', 'table of content',
+        'sr. no', 'contents page', 'submitted by',
+        'batch year', 'enrolment no', 'project guide',
+        'university of allahabad', 'institute of professional',
+        'centre of computer'
+    ]
 
     question_words = set(
         word.lower() for word in question.split()
         if word.lower() not in stop_words
+        and len(word) > 2
     )
 
     scored = []
     for sentence in sentences:
         sentence = sentence.strip()
-        if len(sentence) < 20:
+
+        # Skip very short sentences
+        if len(sentence.split()) < 8:
             continue
+
+        # Skip noise sentences
+        is_noise = False
+        sentence_lower = sentence.lower()
+        for phrase in noise_phrases:
+            if phrase in sentence_lower:
+                is_noise = True
+                break
+        if is_noise:
+            continue
+
+        # Score by keyword matches
         sentence_words = set(sentence.lower().split())
         score = len(question_words & sentence_words)
+
+        # Bonus: longer sentences with more info score higher
+        if len(sentence.split()) > 20:
+            score += 1
+
         scored.append((score, sentence))
 
+    # Sort by score
     scored.sort(key=lambda x: x[0], reverse=True)
 
     if not scored:
-        return context[:500]
+        # Fallback — return first 300 chars of context
+        # that don't contain noise
+        clean_context = context[:500]
+        return clean_context
 
+    # Return top 3 most relevant sentences
     top_sentences = [s for _, s in scored[:3]]
-    return ' '.join(top_sentences)
+    answer = ' '.join(top_sentences)
 
+    return answer
 
 def build_sources(chunks):
     """

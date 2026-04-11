@@ -1,0 +1,4145 @@
+
+======================================================================
+FILE: export_code.py
+======================================================================
+import os
+
+project_dir = r"D:\PROJECTS\askdocs-ai"  # change this
+output_file = "clean_project_code.txt"
+
+# Only include meaningful code files
+include_extensions = {
+    ".py", ".js", ".ts", ".html", ".css",
+    ".cpp", ".c", ".java", ".json"
+}
+
+# Folders to ignore
+exclude_dirs = {
+    "node_modules", ".git", "__pycache__",
+    "dist", "build", ".next", "venv", ".vscode"
+}
+
+# Files to ignore
+exclude_files = {
+    "package-lock.json", "yarn.lock"
+}
+
+# Max file size (in bytes) -> 200 KB
+MAX_FILE_SIZE = 200 * 1024
+
+total_lines = 0
+
+with open(output_file, "w", encoding="utf-8") as outfile:
+    for root, dirs, files in os.walk(project_dir):
+
+        # Remove unwanted directories
+        dirs[:] = [d for d in dirs if d not in exclude_dirs]
+
+        for file in files:
+            file_path = os.path.join(root, file)
+            rel_path = os.path.relpath(file_path, project_dir)
+
+            # Skip unwanted files
+            if file in exclude_files:
+                continue
+
+            # Skip by extension
+            _, ext = os.path.splitext(file)
+            if ext.lower() not in include_extensions:
+                continue
+
+            # Skip minified files
+            if ".min." in file:
+                continue
+
+            # Skip large files
+            if os.path.getsize(file_path) > MAX_FILE_SIZE:
+                continue
+
+            try:
+                with open(file_path, "r", encoding="utf-8") as infile:
+                    lines = infile.readlines()
+
+                # Skip files with too many lines (likely generated)
+                if len(lines) > 2000:
+                    continue
+
+                outfile.write("\n" + "="*70 + "\n")
+                outfile.write(f"FILE: {rel_path}\n")
+                outfile.write("="*70 + "\n")
+
+                outfile.writelines(lines)
+                total_lines += len(lines)
+
+            except:
+                continue
+
+print(f"✅ Done! Clean code exported. Total lines: {total_lines}")
+======================================================================
+FILE: manage.py
+======================================================================
+#!/usr/bin/env python
+"""Django's command-line utility for administrative tasks."""
+import os
+import sys
+
+
+def main():
+    """Run administrative tasks."""
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'askdocs_backend.settings')
+    try:
+        from django.core.management import execute_from_command_line
+    except ImportError as exc:
+        raise ImportError(
+            "Couldn't import Django. Are you sure it's installed and "
+            "available on your PYTHONPATH environment variable? Did you "
+            "forget to activate a virtual environment?"
+        ) from exc
+    execute_from_command_line(sys.argv)
+
+
+if __name__ == '__main__':
+    main()
+
+======================================================================
+FILE: test_qa.py
+======================================================================
+import os
+import django
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'askdocs_backend.settings')
+django.setup()
+
+from qa_engine.pipeline import answer_question
+
+questions = [
+    "What is AskDocs AI?",
+    "What is the problem definition?",
+    "What is the objective of this project?",
+    "What technologies are used?",
+    "What is semantic search?",
+    "What is FAISS used for?",
+    "What are the functional requirements?",
+    "What is JWT authentication?",
+    "What is sentence transformer?",
+    "What is the system workflow?",
+]
+
+noise_words = ['page no', 'ccet ips', 'submitted by', 'batch year', 'enrolment']
+
+passed = 0
+failed = 0
+
+for i, q in enumerate(questions, 1):
+    result = answer_question(q)
+    answer = result['answer']
+
+    has_noise = any(n in answer.lower() for n in noise_words)
+    is_short = len(answer.split()) < 10
+    is_fallback = 'could not find' in answer.lower()
+
+    if has_noise or is_fallback:
+        status = '❌'
+        failed += 1
+    elif is_short:
+        status = '⚠️'
+        failed += 1
+    else:
+        status = '✅'
+        passed += 1
+
+    print(f"\n{status} Q{i}: {q}")
+    print(f"   A: {answer[:200]}")
+
+print(f"\n{'='*50}")
+print(f"Results: {passed}/10 passed | {failed}/10 failed")
+======================================================================
+FILE: askdocs_backend\asgi.py
+======================================================================
+"""
+ASGI config for askdocs_backend project.
+
+It exposes the ASGI callable as a module-level variable named ``application``.
+
+For more information on this file, see
+https://docs.djangoproject.com/en/5.2/howto/deployment/asgi/
+"""
+
+import os
+
+from django.core.asgi import get_asgi_application
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'askdocs_backend.settings')
+
+application = get_asgi_application()
+
+======================================================================
+FILE: askdocs_backend\settings.py
+======================================================================
+"""
+Django settings for askdocs_backend project.
+
+Generated by 'django-admin startproject' using Django 5.2.12.
+
+For more information on this file, see
+https://docs.djangoproject.com/en/5.2/topics/settings/
+
+For the full list of settings and their values, see
+https://docs.djangoproject.com/en/5.2/ref/settings/
+"""
+
+from pathlib import Path
+import os
+
+
+# Build paths inside the project like this: BASE_DIR / 'subdir'.
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+# Quick-start development settings - unsuitable for production
+# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
+
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = 'django-insecure-&0yuj(7yd3n(64ytn%l^1zv9cy(11qwrv0w$7@zmw%)69%26(o'
+
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = True
+
+ALLOWED_HOSTS = []
+
+
+# Application definition
+
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+
+    # Third-party
+    'rest_framework',
+    'rest_framework_simplejwt',
+
+    # Your apps
+    'users',
+    'documents',
+    'qa_engine',
+    'corsheaders',
+
+]
+
+MIDDLEWARE = [
+    'django.middleware.security.SecurityMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
+]
+
+ROOT_URLCONF = 'askdocs_backend.urls'
+
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
+    },
+]
+
+WSGI_APPLICATION = 'askdocs_backend.wsgi.application'
+
+
+# Database
+# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'askdocs_db',
+        'USER': 'postgres',
+        'PASSWORD': 'postgres',  # whatever password worked
+        'HOST': 'localhost',
+        'PORT': '5432',
+    }
+}
+
+
+# Password validation
+# https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
+
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
+]
+
+
+# Internationalization
+# https://docs.djangoproject.com/en/5.2/topics/i18n/
+
+LANGUAGE_CODE = 'en-us'
+
+TIME_ZONE = 'UTC'
+
+USE_I18N = True
+
+USE_TZ = True
+
+
+# Static files (CSS, JavaScript, Images)
+# https://docs.djangoproject.com/en/5.2/howto/static-files/
+
+STATIC_URL = 'static/'
+
+# Default primary key field type
+# https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+}
+
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'AUTH_HEADER_TYPES': ('Bearer',),
+}
+
+
+AUTH_USER_MODEL = 'users.CustomUser'
+
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 10,
+}
+CORS_ALLOW_ALL_ORIGINS = True  # only for development
+
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',
+]
+======================================================================
+FILE: askdocs_backend\urls.py
+======================================================================
+from django.contrib import admin
+from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
+from django.views.generic import RedirectView
+import os
+
+def serve_frontend(request, filename):
+    from django.http import FileResponse, Http404
+    file_path = os.path.join(settings.BASE_DIR, 'static', 'frontend', filename)
+    if os.path.exists(file_path):
+        return FileResponse(open(file_path, 'rb'))
+    raise Http404
+
+def serve_frontend_asset(request, folder, filename):
+    from django.http import FileResponse, Http404
+    file_path = os.path.join(
+        settings.BASE_DIR, 'static', 'frontend', folder, filename
+    )
+    if os.path.exists(file_path):
+        return FileResponse(open(file_path, 'rb'))
+    raise Http404
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('api/auth/', include('users.urls')),
+    path('api/documents/', include('documents.urls')),
+    path('api/qa/', include('qa_engine.urls')),
+
+    # Serve frontend pages
+    path('', RedirectView.as_view(url='/login')),
+    path('login', serve_frontend, {'filename': 'login.html'}),
+    path('register', serve_frontend, {'filename': 'register.html'}),
+    path('app', serve_frontend, {'filename': 'index.html'}),
+
+    # Serve CSS and JS
+    path('css/<str:filename>', serve_frontend_asset, {'folder': 'css'}),
+    path('js/<str:filename>', serve_frontend_asset, {'folder': 'js'}),
+
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+======================================================================
+FILE: askdocs_backend\wsgi.py
+======================================================================
+"""
+WSGI config for askdocs_backend project.
+
+It exposes the WSGI callable as a module-level variable named ``application``.
+
+For more information on this file, see
+https://docs.djangoproject.com/en/5.2/howto/deployment/wsgi/
+"""
+
+import os
+
+from django.core.wsgi import get_wsgi_application
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'askdocs_backend.settings')
+
+application = get_wsgi_application()
+
+======================================================================
+FILE: askdocs_backend\__init__.py
+======================================================================
+
+======================================================================
+FILE: documents\admin.py
+======================================================================
+from django.contrib import admin
+from .models import Document, ExtractedText, DocumentChunk
+
+
+@admin.register(Document)
+class DocumentAdmin(admin.ModelAdmin):
+    list_display = ('title', 'owner', 'file_size', 'upload_date', 'is_processed')
+    list_filter = ('is_processed', 'upload_date')
+    search_fields = ('title', 'owner__username')
+
+
+@admin.register(ExtractedText)
+class ExtractedTextAdmin(admin.ModelAdmin):
+    list_display = ('document', 'page_number')
+    search_fields = ('document__title',)
+
+
+@admin.register(DocumentChunk)
+class DocumentChunkAdmin(admin.ModelAdmin):
+    list_display = ('document', 'chunk_index', 'page_number')
+    search_fields = ('document__title',)
+
+
+from .models import ChunkEmbedding
+
+@admin.register(ChunkEmbedding)
+class ChunkEmbeddingAdmin(admin.ModelAdmin):
+    list_display = ('chunk', )
+======================================================================
+FILE: documents\apps.py
+======================================================================
+from django.apps import AppConfig
+
+
+class DocumentsConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'documents'
+
+======================================================================
+FILE: documents\chunker.py
+======================================================================
+import re
+
+
+def split_into_chunks(text, chunk_size=400, overlap=50):
+    """
+    Improved chunking strategy:
+    1. First split text into paragraphs
+    2. Then combine paragraphs into chunks
+    3. Respect sentence boundaries
+    4. Skip chunks that are too short or just noise
+    """
+    # Step 1: Split into paragraphs
+    paragraphs = split_into_paragraphs(text)
+
+    # Step 2: Combine paragraphs into chunks
+    chunks = combine_paragraphs_into_chunks(
+        paragraphs,
+        chunk_size=chunk_size,
+        overlap=overlap
+    )
+
+    return chunks
+
+
+def split_into_paragraphs(text):
+    """
+    Split text into meaningful paragraphs.
+    A paragraph is a group of related sentences.
+    """
+    # Split on double newlines or sentence endings
+    # followed by what looks like a new topic
+    raw_paragraphs = re.split(r'\n{2,}|(?<=[.!?])\s{2,}', text)
+
+    paragraphs = []
+    for para in raw_paragraphs:
+        para = para.strip()
+
+        # Skip empty or very short paragraphs
+        if not para or len(para.split()) < 5:
+            continue
+
+        # Skip paragraphs that are just noise
+        if is_noise_paragraph(para):
+            continue
+
+        paragraphs.append(para)
+
+    return paragraphs
+
+
+def is_noise_paragraph(text):
+    """
+    Returns True if paragraph is noise and should be skipped.
+    """
+    text_lower = text.lower().strip()
+
+    noise_patterns = [
+        r'^page\s+no',
+        r'^ccet\s+ips',
+        r'^askdocs\s+ai\s*$',
+        r'^\d+\s*$',
+        r'^[ivxlcdm]+\s*$',
+        r'^table\s+of\s+content',
+        r'^sr\.?\s*no',
+        r'^submitted\s+by',
+        r'^batch\s+year',
+        r'^enrolment\s+no',
+        r'^project\s+guide',
+    ]
+
+    for pattern in noise_patterns:
+        if re.match(pattern, text_lower):
+            return True
+
+    # Skip if less than 5 meaningful words
+    words = re.findall(r'[a-zA-Z]{3,}', text)
+    if len(words) < 5:
+        return True
+
+    return False
+
+
+def combine_paragraphs_into_chunks(paragraphs, chunk_size=400, overlap=50):
+    """
+    Combine paragraphs into chunks of approximately chunk_size words.
+    Tries to keep related paragraphs together.
+    """
+    chunks = []
+    current_words = []
+    current_count = 0
+
+    for para in paragraphs:
+        para_words = para.split()
+        para_count = len(para_words)
+
+        # If a single paragraph is longer than chunk_size
+        # split it into sentences first
+        if para_count > chunk_size:
+            # Save current chunk first
+            if current_words and current_count >= 50:
+                chunks.append(' '.join(current_words))
+                # Keep overlap
+                current_words = current_words[-overlap:]
+                current_count = len(current_words)
+
+            # Split long paragraph into sentence chunks
+            sentence_chunks = split_long_paragraph(
+                para, chunk_size, overlap
+            )
+            chunks.extend(sentence_chunks)
+            continue
+
+        # If adding this paragraph exceeds chunk size
+        if current_count + para_count > chunk_size and current_count >= 50:
+            # Save current chunk
+            chunks.append(' '.join(current_words))
+
+            # Start new chunk with overlap from previous
+            overlap_words = current_words[-overlap:] if overlap else []
+            current_words = overlap_words + para_words
+            current_count = len(current_words)
+
+        else:
+            # Add paragraph to current chunk
+            current_words.extend(para_words)
+            current_count += para_count
+
+    # Don't forget the last chunk
+    if current_words and current_count >= 30:
+        chunks.append(' '.join(current_words))
+
+    # Final filter — remove chunks that are too short
+    # or contain mostly noise
+    chunks = [
+        c for c in chunks
+        if len(c.split()) >= 30
+        and not is_noise_paragraph(c)
+    ]
+
+    return chunks
+
+
+def split_long_paragraph(text, chunk_size=400, overlap=50):
+    """
+    Split a long paragraph into chunks at sentence boundaries.
+    """
+    # Split into sentences
+    sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', text)
+
+    chunks = []
+    current_words = []
+    current_count = 0
+
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+
+        s_words = sentence.split()
+        s_count = len(s_words)
+
+        if current_count + s_count > chunk_size and current_count >= 30:
+            if current_words:
+                chunks.append(' '.join(current_words))
+            overlap_words = current_words[-overlap:] if overlap else []
+            current_words = overlap_words + s_words
+            current_count = len(current_words)
+        else:
+            current_words.extend(s_words)
+            current_count += s_count
+
+    if current_words and current_count >= 20:
+        chunks.append(' '.join(current_words))
+
+    return chunks
+======================================================================
+FILE: documents\embedder.py
+======================================================================
+import json
+import os
+from sentence_transformers import SentenceTransformer
+from .models import DocumentChunk, ChunkEmbedding
+
+# Tell HuggingFace to use cached model only
+# This prevents it from trying to connect to internet
+os.environ['TRANSFORMERS_OFFLINE'] = '1'
+os.environ['HF_DATASETS_OFFLINE'] = '1'
+
+print("Loading sentence transformer model...")
+model = SentenceTransformer('all-MiniLM-L6-v2')
+print("Model loaded successfully!")
+
+
+def generate_embeddings_for_document(document_id):
+    """
+    Generate and save embeddings for all chunks
+    of a given document.
+    """
+    chunks = DocumentChunk.objects.filter(
+        document_id=document_id
+    )
+
+    if not chunks.exists():
+        print(f"No chunks found for document {document_id}")
+        return False
+
+    print(f"Generating embeddings for {chunks.count()} chunks...")
+
+    for chunk in chunks:
+        vector = model.encode(chunk.text)
+        vector_json = json.dumps(vector.tolist())
+
+        ChunkEmbedding.objects.update_or_create(
+            chunk=chunk,
+            defaults={'embedding_vector': vector_json}
+        )
+
+    print(f"Embeddings generated for document {document_id} ✅")
+    return True
+
+
+def get_question_embedding(question_text):
+    """
+    Convert a user's question into a vector embedding.
+    """
+    vector = model.encode(question_text)
+    return vector
+======================================================================
+FILE: documents\extractor.py
+======================================================================
+import pdfplumber
+import re
+
+
+def extract_text_from_pdf(file_path):
+    """
+    Extract text from each page of a PDF file.
+    Returns a list of dictionaries with page number and text.
+    """
+    pages_data = []
+
+    with pdfplumber.open(file_path) as pdf:
+        for page_num, page in enumerate(pdf.pages, start=1):
+            raw_text = page.extract_text()
+
+            if raw_text:
+                cleaned = clean_text(raw_text)
+                if cleaned and len(cleaned.split()) > 10:
+                    pages_data.append({
+                        'page_number': page_num,
+                        'text': cleaned
+                    })
+
+    return pages_data
+
+
+def clean_text(text):
+    """
+    Aggressively clean raw extracted text.
+
+    Removes:
+    - Page headers and footers
+    - Page number lines
+    - Institution name lines
+    - Very short meaningless lines
+    - Extra whitespace
+    - Special characters
+    """
+
+    lines = text.split('\n')
+    cleaned_lines = []
+
+    # Patterns to remove completely
+    noise_patterns = [
+        r'^page\s+no\.?\s*[ivxlcdm\d]+',      # Page No.i, Page No.1
+        r'^page\s+\d+',                          # Page 1, Page 12
+        r'^\s*\d+\s*$',                          # Lines with only numbers
+        r'^ccet\s+ips\s*$',                      # CCET IPS
+        r'^ccet\s*$',                            # CCET
+        r'^ips\s*$',                             # IPS
+        r'^askdocs\s+ai\s*$',                    # AskDocs AI alone
+        r'^\s*[ivxlcdm]+\s*$',                  # Roman numerals alone
+        r'^table\s+of\s+content',               # Table of Content
+        r'^sr\.?\s*no\.?\s+contents',           # Sr. No. Contents
+        r'^page\s+no\.',                         # Page No.
+        r'^\s*[-–—]+\s*$',                      # Lines of dashes only
+        r'^\s*[•·●]\s*$',                       # Bullet points alone
+    ]
+
+    for line in lines:
+        line = line.strip()
+
+        # Skip empty lines
+        if not line:
+            continue
+
+        # Skip very short lines (less than 3 words)
+        if len(line.split()) < 3:
+            continue
+
+        # Check against noise patterns
+        is_noise = False
+        for pattern in noise_patterns:
+            if re.match(pattern, line, re.IGNORECASE):
+                is_noise = True
+                break
+
+        # Skip lines that are mostly numbers and dots (like ToC entries)
+        # Example: "Introduction iii-v" or "References xvi"
+        if re.match(r'^.{1,40}\s+[ivxlcdm\d]+([-–][ivxlcdm\d]+)?\s*$',
+                    line, re.IGNORECASE):
+            word_count = len(re.findall(r'[a-zA-Z]{3,}', line))
+            if word_count <= 2:
+                is_noise = True
+
+        if not is_noise:
+            cleaned_lines.append(line)
+
+    # Join lines back together
+    text = ' '.join(cleaned_lines)
+
+    # Clean up extra whitespace
+    text = re.sub(r' +', ' ', text)
+    text = re.sub(r'\n+', '\n', text)
+
+    # Remove leftover page markers inline
+    text = re.sub(r'Page No\.\s*[ivxlcdm\d]+', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'CCET IPS', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'AskDocs AI\s+AskDocs AI', 'AskDocs AI', text)
+
+    # Final strip
+    text = text.strip()
+
+    return text
+======================================================================
+FILE: documents\faiss_store.py
+======================================================================
+import json
+import os
+import numpy as np
+import faiss
+
+# Paths where FAISS index and mapping will be saved
+FAISS_INDEX_PATH = "faiss_index/index.faiss"
+CHUNK_MAP_PATH = "faiss_index/chunk_map.json"
+
+# Embedding size for all-MiniLM-L6-v2 model
+EMBEDDING_DIM = 384
+
+
+def build_faiss_index():
+    """
+    Build FAISS index from all saved embeddings.
+
+    Steps:
+    1. Load all ChunkEmbedding objects from DB
+    2. Convert vectors to numpy array
+    3. Build FAISS index
+    4. Save index to disk
+    5. Save chunk_id mapping to disk
+    """
+    from .models import ChunkEmbedding
+
+    embeddings = ChunkEmbedding.objects.select_related('chunk').all()
+
+    if not embeddings.exists():
+        print("No embeddings found. Upload and process a document first.")
+        return False
+
+    vectors = []
+    chunk_map = {}  # maps FAISS position → chunk ID
+
+    for i, emb in enumerate(embeddings):
+        vector = json.loads(emb.embedding_vector)
+        vectors.append(vector)
+        chunk_map[str(i)] = emb.chunk.id
+
+    # Convert to numpy float32 array (required by FAISS)
+    vectors_np = np.array(vectors, dtype=np.float32)
+
+    # Create FAISS index (L2 = Euclidean distance)
+    index = faiss.IndexFlatL2(EMBEDDING_DIM)
+    index.add(vectors_np)
+
+    # Save index to disk
+    os.makedirs("faiss_index", exist_ok=True)
+    faiss.write_index(index, FAISS_INDEX_PATH)
+
+    # Save chunk mapping to disk
+    with open(CHUNK_MAP_PATH, 'w') as f:
+        json.dump(chunk_map, f)
+
+    print(f"FAISS index built with {index.ntotal} vectors ✅")
+    return True
+
+
+def load_faiss_index():
+    """
+    Load FAISS index and chunk mapping from disk.
+    Returns (index, chunk_map) or (None, None) if not found.
+    """
+    if not os.path.exists(FAISS_INDEX_PATH):
+        print("FAISS index not found. Run build_faiss_index() first.")
+        return None, None
+
+    index = faiss.read_index(FAISS_INDEX_PATH)
+
+    with open(CHUNK_MAP_PATH, 'r') as f:
+        chunk_map = json.load(f)
+
+    print(f"FAISS index loaded with {index.ntotal} vectors ✅")
+    return index, chunk_map
+
+
+def search_faiss(question_vector, top_k=5):
+    """
+    Search FAISS index for most similar chunks.
+
+    Returns list of chunk IDs ranked by similarity.
+    """
+    index, chunk_map = load_faiss_index()
+
+    if index is None:
+        return []
+
+    # Convert to numpy float32
+    query = np.array([question_vector], dtype=np.float32)
+
+    # Search — returns distances and indices
+    distances, indices = index.search(query, top_k)
+
+    # Map FAISS indices back to chunk IDs
+    chunk_ids = []
+    for idx in indices[0]:
+        if idx == -1:
+            continue
+        chunk_id = chunk_map.get(str(idx))
+        if chunk_id:
+            chunk_ids.append(chunk_id)
+
+    return chunk_ids
+======================================================================
+FILE: documents\models.py
+======================================================================
+from django.db import models
+from users.models import CustomUser
+
+
+class Document(models.Model):
+    """Stores uploaded document info and metadata"""
+    owner = models.ForeignKey(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name='documents'
+    )
+    title = models.CharField(max_length=255)
+    file = models.FileField(upload_to='documents/')
+    file_size = models.PositiveIntegerField(help_text="File size in bytes")
+    upload_date = models.DateTimeField(auto_now_add=True)
+    is_processed = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.title} (uploaded by {self.owner.username})"
+
+
+class ExtractedText(models.Model):
+    """Stores raw text extracted from each page of a document"""
+    document = models.ForeignKey(
+        Document,
+        on_delete=models.CASCADE,
+        related_name='extracted_texts'
+    )
+    page_number = models.PositiveIntegerField()
+    raw_text = models.TextField()
+
+    class Meta:
+        ordering = ['page_number']
+
+    def __str__(self):
+        return f"Page {self.page_number} of {self.document.title}"
+
+
+class DocumentChunk(models.Model):
+    """Stores cleaned text chunks ready for AI embedding"""
+    document = models.ForeignKey(
+        Document,
+        on_delete=models.CASCADE,
+        related_name='chunks'
+    )
+    chunk_index = models.PositiveIntegerField()
+    text = models.TextField()
+    page_number = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        ordering = ['chunk_index']
+
+    def __str__(self):
+        return f"Chunk {self.chunk_index} of {self.document.title}"
+    
+
+class ChunkEmbedding(models.Model):
+    """Stores the vector embedding for each document chunk"""
+    chunk = models.OneToOneField(
+        DocumentChunk,
+        on_delete=models.CASCADE,
+        related_name='embedding'
+    )
+    embedding_vector = models.TextField()  # stored as JSON string
+
+    def __str__(self):
+        return f"Embedding for chunk {self.chunk.chunk_index} of {self.chunk.document.title}"
+======================================================================
+FILE: documents\processor.py
+======================================================================
+from .models import Document, ExtractedText, DocumentChunk
+from .extractor import extract_text_from_pdf
+from .chunker import split_into_chunks
+
+
+def process_document(document_id):
+    """
+    Full document processing pipeline:
+    Step 1 — Extract & clean text from PDF
+    Step 2 — Save extracted text to DB
+    Step 3 — Chunk text intelligently
+    Step 4 — Save chunks to DB
+    Step 5 — Generate embeddings
+    Step 6 — Build FAISS index
+    Step 7 — Mark as processed
+    """
+    try:
+        document = Document.objects.get(id=document_id)
+    except Document.DoesNotExist:
+        print(f"Document {document_id} not found.")
+        return False
+
+    file_path = document.file.path
+    print(f"\n{'='*50}")
+    print(f"Processing: {document.title}")
+    print(f"{'='*50}")
+
+    # ── STEP 1 & 2: Extract and save text ──────────
+    pages_data = extract_text_from_pdf(file_path)
+
+    if not pages_data:
+        print(f"❌ No text extracted from: {document.title}")
+        return False
+
+    # Clear old data
+    ExtractedText.objects.filter(document=document).delete()
+    DocumentChunk.objects.filter(document=document).delete()
+
+    # Save extracted text
+    total_words = 0
+    for page in pages_data:
+        ExtractedText.objects.create(
+            document=document,
+            page_number=page['page_number'],
+            raw_text=page['text']
+        )
+        total_words += len(page['text'].split())
+
+    print(f"✅ Extracted {len(pages_data)} pages ({total_words} words)")
+
+    # ── STEP 3 & 4: Chunk and save ─────────────────
+    chunk_index = 0
+
+    for page in pages_data:
+        chunks = split_into_chunks(
+            page['text'],
+            chunk_size=400,
+            overlap=50
+        )
+
+        for chunk_text in chunks:
+            # Skip very short chunks
+            if len(chunk_text.split()) < 30:
+                continue
+
+            DocumentChunk.objects.create(
+                document=document,
+                chunk_index=chunk_index,
+                text=chunk_text,
+                page_number=page['page_number']
+            )
+            chunk_index += 1
+
+    print(f"✅ Created {chunk_index} chunks")
+
+    if chunk_index == 0:
+        print("❌ No chunks created — document may be empty or all noise")
+        return False
+
+    # ── STEP 5: Generate embeddings ────────────────
+    print("⏳ Generating embeddings...")
+    from .embedder import generate_embeddings_for_document
+    generate_embeddings_for_document(document_id)
+    print("✅ Embeddings generated")
+
+    # ── STEP 6: Build FAISS index ──────────────────
+    print("⏳ Building FAISS index...")
+    from .faiss_store import build_faiss_index
+    build_faiss_index()
+    print("✅ FAISS index built")
+
+    # ── STEP 7: Mark as processed ──────────────────
+    document.is_processed = True
+    document.save()
+
+    print(f"\n✅ Document '{document.title}' fully processed!")
+    return True
+======================================================================
+FILE: documents\serializers.py
+======================================================================
+from rest_framework import serializers
+from .models import Document, DocumentChunk
+
+
+class DocumentUploadSerializer(serializers.ModelSerializer):
+    """Used when uploading a document"""
+    class Meta:
+        model = Document
+        fields = ('id', 'title', 'file', 'file_size', 'upload_date', 'is_processed')
+        read_only_fields = ('id', 'file_size', 'upload_date', 'is_processed')
+
+
+class DocumentListSerializer(serializers.ModelSerializer):
+    """Used when listing documents"""
+    owner_name = serializers.CharField(source='owner.username', read_only=True)
+
+    class Meta:
+        model = Document
+        fields = ('id', 'title', 'file_size', 'upload_date', 'is_processed', 'owner_name')
+======================================================================
+FILE: documents\tests.py
+======================================================================
+from django.test import TestCase
+
+# Create your tests here.
+
+======================================================================
+FILE: documents\urls.py
+======================================================================
+from django.urls import path
+from .views import (
+    DocumentUploadView,
+    DocumentListView,
+    DocumentDetailView,
+    DocumentExtractedTextView,
+    DocumentChunksView
+)
+
+urlpatterns = [
+    path('upload/', DocumentUploadView.as_view(), name='document-upload'),
+    path('', DocumentListView.as_view(), name='document-list'),
+    path('<int:pk>/', DocumentDetailView.as_view(), name='document-detail'),
+    path('<int:pk>/text/', DocumentExtractedTextView.as_view(), name='document-text'),
+    path('<int:pk>/chunks/', DocumentChunksView.as_view(), name='document-chunks'),
+]
+======================================================================
+FILE: documents\views.py
+======================================================================
+from rest_framework import generics, permissions, status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework.parsers import MultiPartParser, FormParser
+from .models import Document, ExtractedText, DocumentChunk
+from .serializers import DocumentUploadSerializer, DocumentListSerializer
+from .processor import process_document
+
+
+class DocumentUploadView(APIView):
+    """Upload a new document and automatically extract text"""
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        file = request.FILES.get('file')
+
+        # Validate file exists
+        if not file:
+            return Response(
+                {'error': 'No file provided. Please attach a PDF file.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate file type
+        if not file.name.lower().endswith('.pdf'):
+            return Response(
+                {'error': 'Invalid file type. Only PDF files are allowed.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate file size (max 10MB)
+        max_size = 10 * 1024 * 1024
+        if file.size > max_size:
+            return Response(
+                {'error': 'File too large. Maximum size is 10MB.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        title = request.data.get('title', file.name).strip()
+        if not title:
+            title = file.name
+
+        try:
+            document = Document.objects.create(
+                owner=request.user,
+                title=title,
+                file=file,
+                file_size=file.size,
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to save document: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        # Process the document
+        try:
+            success = process_document(document.id)
+            document.refresh_from_db()
+        except Exception as e:
+            document.delete()
+            return Response(
+                {'error': f'Failed to process document: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        serializer = DocumentUploadSerializer(document)
+        return Response(
+            {
+                'message': 'Document uploaded and processed successfully.'
+                           if success else
+                           'Document uploaded but text extraction failed.',
+                'document': serializer.data
+            },
+            status=status.HTTP_201_CREATED
+        )
+
+
+class DocumentListView(generics.ListAPIView):
+    """List all documents belonging to logged-in user"""
+    serializer_class = DocumentListSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Document.objects.filter(
+            owner=self.request.user
+        ).order_by('-upload_date')
+
+
+class DocumentDetailView(generics.RetrieveAPIView):
+    """Get details of a single document"""
+    serializer_class = DocumentListSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Document.objects.filter(owner=self.request.user)
+
+    def get_object(self):
+        try:
+            return super().get_object()
+        except Exception:
+            from rest_framework.exceptions import NotFound
+            raise NotFound('Document not found or access denied.')
+
+
+class DocumentExtractedTextView(APIView):
+    """View extracted text of a document"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            document = Document.objects.get(
+                id=pk,
+                owner=request.user
+            )
+        except Document.DoesNotExist:
+            return Response(
+                {'error': 'Document not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        pages = ExtractedText.objects.filter(document=document)
+
+        if not pages.exists():
+            return Response(
+                {'error': 'No extracted text found for this document.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        data = [
+            {
+                'page_number': page.page_number,
+                'text': page.raw_text[:300] + '...'
+            }
+            for page in pages
+        ]
+
+        return Response({
+            'document': document.title,
+            'total_pages': pages.count(),
+            'pages': data
+        })
+
+
+class DocumentChunksView(APIView):
+    """Preview chunks created from a document"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            document = Document.objects.get(
+                id=pk,
+                owner=request.user
+            )
+        except Document.DoesNotExist:
+            return Response(
+                {'error': 'Document not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        chunks = DocumentChunk.objects.filter(document=document)
+
+        if not chunks.exists():
+            return Response(
+                {'error': 'No chunks found. Document may not be processed yet.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        data = [
+            {
+                'chunk_index': chunk.chunk_index,
+                'page_number': chunk.page_number,
+                'word_count': len(chunk.text.split()),
+                'preview': chunk.text[:200] + '...'
+            }
+            for chunk in chunks
+        ]
+
+        return Response({
+            'document': document.title,
+            'total_chunks': chunks.count(),
+            'chunks': data
+        })
+======================================================================
+FILE: documents\__init__.py
+======================================================================
+
+======================================================================
+FILE: documents\migrations\0001_initial.py
+======================================================================
+# Generated by Django 5.2.12 on 2026-03-25 07:10
+
+import django.db.models.deletion
+from django.conf import settings
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    initial = True
+
+    dependencies = [
+        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
+    ]
+
+    operations = [
+        migrations.CreateModel(
+            name='Document',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('title', models.CharField(max_length=255)),
+                ('file', models.FileField(upload_to='documents/')),
+                ('file_size', models.PositiveIntegerField(help_text='File size in bytes')),
+                ('upload_date', models.DateTimeField(auto_now_add=True)),
+                ('is_processed', models.BooleanField(default=False)),
+                ('owner', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='documents', to=settings.AUTH_USER_MODEL)),
+            ],
+        ),
+        migrations.CreateModel(
+            name='DocumentChunk',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('chunk_index', models.PositiveIntegerField()),
+                ('text', models.TextField()),
+                ('page_number', models.PositiveIntegerField(default=1)),
+                ('document', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='chunks', to='documents.document')),
+            ],
+            options={
+                'ordering': ['chunk_index'],
+            },
+        ),
+        migrations.CreateModel(
+            name='ExtractedText',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('page_number', models.PositiveIntegerField()),
+                ('raw_text', models.TextField()),
+                ('document', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='extracted_texts', to='documents.document')),
+            ],
+            options={
+                'ordering': ['page_number'],
+            },
+        ),
+    ]
+
+======================================================================
+FILE: documents\migrations\0002_chunkembedding.py
+======================================================================
+# Generated by Django 5.2.12 on 2026-03-26 08:17
+
+import django.db.models.deletion
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ('documents', '0001_initial'),
+    ]
+
+    operations = [
+        migrations.CreateModel(
+            name='ChunkEmbedding',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('embedding_vector', models.TextField()),
+                ('chunk', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='embedding', to='documents.documentchunk')),
+            ],
+        ),
+    ]
+
+======================================================================
+FILE: documents\migrations\__init__.py
+======================================================================
+
+======================================================================
+FILE: faiss_index\chunk_map.json
+======================================================================
+{"0": 478, "1": 479, "2": 480, "3": 481, "4": 482, "5": 483, "6": 484, "7": 485, "8": 486, "9": 487, "10": 488, "11": 489, "12": 490}
+======================================================================
+FILE: qa_engine\admin.py
+======================================================================
+from django.contrib import admin
+from .models import QueryLog, QuerySource
+
+
+class QuerySourceInline(admin.TabularInline):
+    model = QuerySource
+    extra = 0
+    readonly_fields = ('document', 'page_number', 'relevant_text')
+
+
+@admin.register(QueryLog)
+class QueryLogAdmin(admin.ModelAdmin):
+    list_display = ('question', 'user', 'created_at')
+    search_fields = ('question', 'user__username')
+    readonly_fields = ('question', 'answer', 'user', 'created_at')
+    inlines = [QuerySourceInline]
+
+
+@admin.register(QuerySource)
+class QuerySourceAdmin(admin.ModelAdmin):
+    list_display = ('query', 'document', 'page_number')
+    search_fields = ('document__title',)
+======================================================================
+FILE: qa_engine\apps.py
+======================================================================
+from django.apps import AppConfig
+
+
+class QaEngineConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'qa_engine'
+
+======================================================================
+FILE: qa_engine\models.py
+======================================================================
+
+from django.db import models
+from users.models import CustomUser
+from documents.models import Document
+
+
+class QueryLog(models.Model):
+    """
+    Stores every question asked and the answer generated.
+    Used for chat history and analytics.
+    """
+    user = models.ForeignKey(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name='queries'
+    )
+    question = models.TextField()
+    answer = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Q: {self.question[:50]} (by {self.user.username})"
+
+
+class QuerySource(models.Model):
+    """
+    Stores the source references for each answer.
+    Each QueryLog can have multiple sources.
+    """
+    query = models.ForeignKey(
+        QueryLog,
+        on_delete=models.CASCADE,
+        related_name='query_sources'
+    )
+    document = models.ForeignKey(
+        Document,
+        on_delete=models.CASCADE,
+        related_name='query_sources'
+    )
+    page_number = models.PositiveIntegerField()
+    relevant_text = models.TextField()  # the chunk text used
+
+    def __str__(self):
+        return f"Source: {self.document.title} (Page {self.page_number})"
+======================================================================
+FILE: qa_engine\pipeline.py
+======================================================================
+import re
+from .searcher import search_similar_chunks
+
+
+# ── Noise filters ──────────────────────────────
+NOISE_PHRASES = [
+    'page no', 'ccet ips', 'ccet', 'table of content',
+    'sr. no', 'submitted by', 'batch year', 'enrolment no',
+    'project guide', 'university of allahabad',
+    'institute of professional', 'centre of computer',
+    'prayagraj', 'uttar pradesh', 'master of computer',
+    '4th semester', '2024-2026', 'u2449028',
+]
+
+STOP_WORDS = {
+    'what', 'is', 'the', 'a', 'an', 'of', 'in', 'to',
+    'and', 'or', 'for', 'how', 'why', 'who', 'when',
+    'where', 'are', 'was', 'were', 'does', 'do', 'did',
+    'can', 'could', 'would', 'should', 'tell', 'me',
+    'about', 'explain', 'describe', 'list', 'give',
+    'define', 'definition', 'please', 'this', 'that',
+    'these', 'those', 'with', 'from', 'has', 'have',
+    'been', 'will', 'its', 'their', 'which', 'some',
+}
+
+
+def is_noise_sentence(sentence):
+    """
+    Returns True if sentence is noise and
+    should NOT appear in the answer.
+    """
+    sentence_lower = sentence.lower()
+
+    # Check noise phrases
+    for phrase in NOISE_PHRASES:
+        if phrase in sentence_lower:
+            return True
+
+    # Skip sentences with too many numbers
+    digits = re.findall(r'\d', sentence)
+    if len(digits) > len(sentence) * 0.3:
+        return True
+
+    # Skip sentences that look like headers
+    # (ALL CAPS or Title Case with few words)
+    words = sentence.split()
+    if len(words) < 8:
+        caps_words = sum(1 for w in words if w.isupper() and len(w) > 1)
+        if caps_words >= len(words) * 0.5:
+            return True
+
+    return False
+
+
+def get_question_keywords(question):
+    """
+    Extract meaningful keywords from question.
+    Removes stop words and short words.
+    """
+    words = re.findall(r'[a-zA-Z]+', question.lower())
+    keywords = set(
+        w for w in words
+        if w not in STOP_WORDS and len(w) > 2
+    )
+    return keywords
+
+
+def score_sentence(sentence, keywords):
+    """
+    Score a sentence based on how relevant it is
+    to the question keywords.
+
+    Scoring rules:
+    +2 per exact keyword match
+    +1 if sentence is longer (more informative)
+    +1 if sentence starts with a keyword
+    -1 if sentence is very short
+    """
+    sentence_lower = sentence.lower()
+    sentence_words = set(re.findall(r'[a-zA-Z]+', sentence_lower))
+    word_list = sentence.split()
+
+    score = 0
+
+    # Exact keyword matches
+    matches = keywords & sentence_words
+    score += len(matches) * 2
+
+    # Partial matches (keyword appears as substring)
+    for keyword in keywords:
+        if keyword in sentence_lower and keyword not in sentence_words:
+            score += 1
+
+    # Bonus for longer informative sentences
+    if len(word_list) > 20:
+        score += 1
+    if len(word_list) > 40:
+        score += 1
+
+    # Bonus if sentence starts with a keyword
+    if word_list and word_list[0].lower() in keywords:
+        score += 1
+
+    # Penalty for very short sentences
+    if len(word_list) < 8:
+        score -= 2
+
+    return score
+
+
+def build_context(chunks, max_words=800):
+    """
+    Combine retrieved chunks into a single context string.
+    """
+    context_parts = []
+    total_words = 0
+
+    for chunk in chunks:
+        chunk_words = chunk['text'].split()
+        if total_words + len(chunk_words) > max_words:
+            break
+        context_parts.append(chunk['text'])
+        total_words += len(chunk_words)
+
+    return '\n\n'.join(context_parts)
+
+
+def extract_answer(question, context):
+    """
+    Extract the most relevant answer sentences from context.
+
+    Strategy:
+    1. Split context into sentences
+    2. Filter out noise sentences
+    3. Score each sentence by keyword relevance
+    4. Return top 3 highest scoring sentences
+    """
+    if not context:
+        return "I could not find relevant information to answer your question."
+
+    # Get question keywords
+    keywords = get_question_keywords(question)
+
+    # Split into sentences
+    sentences = re.split(r'(?<=[.!?])\s+', context)
+
+    scored = []
+    for sentence in sentences:
+        sentence = sentence.strip()
+
+        # Skip empty or very short sentences
+        if len(sentence.split()) < 6:
+            continue
+
+        # Skip noise sentences
+        if is_noise_sentence(sentence):
+            continue
+
+        # Score the sentence
+        score = score_sentence(sentence, keywords)
+
+        # Only include sentences with positive score
+        if score > 0:
+            scored.append((score, sentence))
+
+    # Sort by score highest first
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    if not scored:
+        # Fallback — return first clean sentence from context
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if (len(sentence.split()) >= 10
+                    and not is_noise_sentence(sentence)):
+                return sentence
+        return "I found related content but could not extract a clear answer. Please try rephrasing your question."
+
+    # Take top 3 sentences
+    top_sentences = [s for _, s in scored[:3]]
+
+    # Sort them back in original order for readability
+    original_order = []
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if sentence in top_sentences:
+            original_order.append(sentence)
+            if len(original_order) == len(top_sentences):
+                break
+
+    answer = ' '.join(original_order) if original_order else ' '.join(top_sentences)
+    return answer
+
+
+def build_sources(chunks):
+    """
+    Build a clean deduplicated list of sources.
+    """
+    seen = set()
+    sources_data = []
+    chunks_for_db = []
+
+    for chunk in chunks:
+        key = (chunk['document_title'], chunk['page_number'])
+
+        if key not in seen:
+            seen.add(key)
+            sources_data.append({
+                'document': chunk['document_title'],
+                'document_id': chunk['document_id'],
+                'page': chunk['page_number']
+            })
+
+        chunks_for_db.append(chunk)
+
+    return sources_data, chunks_for_db
+
+
+def save_query_to_db(user, question, answer, chunks):
+    """
+    Save the question, answer, and sources to database.
+    """
+    from .models import QueryLog, QuerySource
+    from documents.models import Document
+
+    query_log = QueryLog.objects.create(
+        user=user,
+        question=question,
+        answer=answer
+    )
+
+    seen = set()
+    for chunk in chunks:
+        key = (chunk['document_id'], chunk['page_number'])
+        if key in seen:
+            continue
+        seen.add(key)
+
+        try:
+            document = Document.objects.get(id=chunk['document_id'])
+            QuerySource.objects.create(
+                query=query_log,
+                document=document,
+                page_number=chunk['page_number'],
+                relevant_text=chunk['text'][:500]
+            )
+        except Document.DoesNotExist:
+            continue
+
+    return query_log
+
+
+def answer_question(question, user=None):
+    """
+    Main Q&A pipeline:
+    1. Validate question
+    2. Search for relevant chunks
+    3. Build context
+    4. Extract clean answer
+    5. Build sources
+    6. Save to DB
+    7. Return structured response
+    """
+    if not question or not question.strip():
+        return {
+            "question": question,
+            "answer": "Please provide a valid question.",
+            "sources": [],
+        }
+
+    print(f"\nProcessing: {question}")
+
+    # Step 1: Semantic search
+    chunks = search_similar_chunks(question, top_k=5)
+
+    if not chunks:
+        return {
+            "question": question,
+            "answer": "No relevant documents found. Please upload documents first.",
+            "sources": [],
+        }
+
+    # Step 2: Build context
+    context = build_context(chunks, max_words=800)
+
+    # Step 3: Extract answer
+    answer = extract_answer(question, context)
+
+    # Step 4: Build sources
+    sources_data, chunks_for_db = build_sources(chunks)
+
+    # Step 5: Save to DB
+    if user:
+        save_query_to_db(user, question, answer, chunks_for_db)
+
+    return {
+        "question": question,
+        "answer": answer,
+        "sources": sources_data,
+    }
+======================================================================
+FILE: qa_engine\searcher.py
+======================================================================
+from documents.faiss_store import search_faiss
+from documents.embedder import get_question_embedding
+from documents.models import DocumentChunk
+
+
+def search_similar_chunks(question, top_k=5):
+    """
+    Full semantic search pipeline:
+    1. Convert question to embedding
+    2. Search FAISS for similar vectors
+    3. Retrieve matching chunks from DB
+    4. Return chunks with source info
+    """
+
+    # Step 1: Convert question to vector
+    question_vector = get_question_embedding(question)
+
+    # Step 2: Search FAISS
+    chunk_ids = search_faiss(question_vector, top_k=top_k)
+
+    if not chunk_ids:
+        return []
+
+    # Step 3: Retrieve chunks from DB
+    results = []
+    for chunk_id in chunk_ids:
+        try:
+            chunk = DocumentChunk.objects.select_related('document').get(id=chunk_id)
+            results.append({
+                'chunk_id': chunk.id,
+                'chunk_index': chunk.chunk_index,
+                'page_number': chunk.page_number,
+                'text': chunk.text,
+                'document_id': chunk.document.id,
+                'document_title': chunk.document.title,
+            })
+        except DocumentChunk.DoesNotExist:
+            continue
+
+    return results
+
+
+
+======================================================================
+FILE: qa_engine\serializers.py
+======================================================================
+from rest_framework import serializers
+from .models import QueryLog, QuerySource
+
+
+class QuerySourceSerializer(serializers.ModelSerializer):
+    document_title = serializers.CharField(
+        source='document.title',
+        read_only=True
+    )
+
+    class Meta:
+        model = QuerySource
+        fields = ('document_title', 'page_number', 'relevant_text')
+
+
+class QueryLogSerializer(serializers.ModelSerializer):
+    sources = QuerySourceSerializer(
+        source='query_sources',
+        many=True,
+        read_only=True
+    )
+
+    class Meta:
+        model = QueryLog
+        fields = ('id', 'question', 'answer', 'created_at', 'sources')
+======================================================================
+FILE: qa_engine\tests.py
+======================================================================
+from django.test import TestCase
+
+# Create your tests here.
+
+======================================================================
+FILE: qa_engine\urls.py
+======================================================================
+from django.urls import path
+from .views import AskQuestionView, ChatHistoryView, ClearHistoryView
+
+urlpatterns = [
+    path('ask/', AskQuestionView.as_view(), name='ask-question'),
+    path('history/', ChatHistoryView.as_view(), name='chat-history'),
+    path('history/clear/', ClearHistoryView.as_view(), name='clear-history'),
+]
+======================================================================
+FILE: qa_engine\views.py
+======================================================================
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import permissions, status
+from .pipeline import answer_question
+from .models import QueryLog
+from .serializers import QueryLogSerializer
+
+
+class AskQuestionView(APIView):
+    """POST /api/qa/ask/"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        question = request.data.get('question', '').strip()
+
+        # Input validation
+        if not question:
+            return Response(
+                {'error': 'Please provide a question.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if len(question) < 5:
+            return Response(
+                {'error': 'Question is too short. Minimum 5 characters.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if len(question) > 500:
+            return Response(
+                {'error': 'Question is too long. Maximum 500 characters.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            result = answer_question(
+                question=question,
+                user=request.user
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to process question: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        return Response(
+            {
+                'question': result['question'],
+                'answer': result['answer'],
+                'sources': result['sources'],
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+class ChatHistoryView(APIView):
+    """GET /api/qa/history/"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        # Get page size from query params (default 10)
+        try:
+            limit = int(request.query_params.get('limit', 10))
+            limit = min(limit, 50)  # max 50 at a time
+        except ValueError:
+            limit = 10
+
+        logs = QueryLog.objects.filter(
+            user=request.user
+        ).prefetch_related('query_sources__document')[:limit]
+
+        serializer = QueryLogSerializer(logs, many=True)
+        return Response({
+            'count': logs.count(),
+            'results': serializer.data
+        })
+
+
+class ClearHistoryView(APIView):
+    """DELETE /api/qa/history/clear/"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request):
+        deleted_count, _ = QueryLog.objects.filter(
+            user=request.user
+        ).delete()
+
+        return Response(
+            {'message': f'Deleted {deleted_count} queries from history.'},
+            status=status.HTTP_200_OK
+        )
+
+======================================================================
+FILE: qa_engine\__init__.py
+======================================================================
+
+======================================================================
+FILE: qa_engine\migrations\0001_initial.py
+======================================================================
+# Generated by Django 5.2.12 on 2026-03-28 05:15
+
+import django.db.models.deletion
+from django.conf import settings
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    initial = True
+
+    dependencies = [
+        ('documents', '0002_chunkembedding'),
+        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
+    ]
+
+    operations = [
+        migrations.CreateModel(
+            name='QueryLog',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('question', models.TextField()),
+                ('answer', models.TextField()),
+                ('created_at', models.DateTimeField(auto_now_add=True)),
+                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='queries', to=settings.AUTH_USER_MODEL)),
+            ],
+            options={
+                'ordering': ['-created_at'],
+            },
+        ),
+        migrations.CreateModel(
+            name='QuerySource',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('page_number', models.PositiveIntegerField()),
+                ('relevant_text', models.TextField()),
+                ('document', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='query_sources', to='documents.document')),
+                ('query', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='query_sources', to='qa_engine.querylog')),
+            ],
+        ),
+    ]
+
+======================================================================
+FILE: qa_engine\migrations\__init__.py
+======================================================================
+
+======================================================================
+FILE: static\frontend\index.html
+======================================================================
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AskDocs AI</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+
+<!-- Auth Guard: redirect to login if not logged in -->
+<div id="app" style="display:none; width:100%; height:100vh;">
+
+    <!-- ── SIDEBAR ─────────────────────────────── -->
+    <aside class="sidebar" id="sidebar">
+
+        <!-- Logo -->
+        <div class="sidebar-logo">
+            <span class="logo-icon">🧠</span>
+            <span class="logo-text">AskDocs AI</span>
+        </div>
+
+        <!-- Upload Button -->
+        <button class="upload-btn" onclick="openUploadModal()">
+            <span>+</span> Upload Document
+        </button>
+
+        <!-- Documents List -->
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">📄 Documents</div>
+            <div class="doc-list" id="docList">
+                <div class="empty-state-small">No documents yet</div>
+            </div>
+        </div>
+
+        <!-- Chat History -->
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">🕐 Recent Questions</div>
+            <div class="history-list" id="historyList">
+                <div class="empty-state-small">No history yet</div>
+            </div>
+        </div>
+
+        <!-- Sidebar Footer -->
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <div class="user-avatar" id="userAvatar">K</div>
+                <span class="username" id="usernameDisplay">User</span>
+            </div>
+            <button class="logout-btn" onclick="handleLogout()">
+                Logout
+            </button>
+        </div>
+
+    </aside>
+
+    <!-- ── MAIN CONTENT ────────────────────────── -->
+    <main class="main-content">
+
+        <!-- Top Bar -->
+        <div class="topbar">
+            <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+            <h2 class="topbar-title">Chat with your Documents</h2>
+            <div class="topbar-right">
+                <span class="status-dot"></span>
+                <span class="status-text">AI Ready</span>
+            </div>
+        </div>
+
+        <!-- Chat Area -->
+        <div class="chat-area" id="chatArea">
+
+            <!-- Welcome Message -->
+            <div class="welcome-screen" id="welcomeScreen">
+                <div class="welcome-icon">🧠</div>
+                <h2>Welcome to AskDocs AI</h2>
+                <p>Upload a PDF document and start asking questions.<br>
+                The AI will find relevant answers with source references.</p>
+                <div class="welcome-tips">
+                    <div class="tip">📤 Upload a PDF from the sidebar</div>
+                    <div class="tip">💬 Ask any question about your document</div>
+                    <div class="tip">📌 Get answers with page references</div>
+                </div>
+            </div>
+
+            <!-- Messages will appear here -->
+            <div class="messages-container" id="messagesContainer"></div>
+
+        </div>
+
+        <!-- Input Area -->
+        <div class="input-area">
+            <div class="input-wrapper">
+                <textarea
+                    id="questionInput"
+                    placeholder="Ask a question about your documents..."
+                    rows="1"
+                    onkeydown="handleKeyDown(event)"
+                    oninput="autoResize(this)"
+                ></textarea>
+                <button
+                    class="send-btn"
+                    id="sendBtn"
+                    onclick="sendQuestion()"
+                >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                        <path d="M22 2L11 13" stroke="white" stroke-width="2"
+                              stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="white"
+                              stroke-width="2" stroke-linecap="round"
+                              stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="input-hint">Press Enter to send · Shift+Enter for new line</div>
+        </div>
+
+    </main>
+
+</div>
+
+<!-- ── UPLOAD MODAL ────────────────────────────── -->
+<div class="modal-overlay" id="uploadModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Upload Document</h3>
+            <button class="modal-close" onclick="closeUploadModal()">×</button>
+        </div>
+
+        <div class="modal-body">
+            <!-- Drop Zone -->
+            <div class="drop-zone" id="dropZone" onclick="triggerFileInput()">
+                <div class="drop-icon">📄</div>
+                <p class="drop-text">Click to choose a PDF file</p>
+                <p class="drop-hint">Supported format: PDF only · Max 10MB</p>
+                <input type="file" id="fileInput" accept=".pdf"
+                       style="display:none" onchange="handleFileSelect(event)"/>
+            </div>
+
+            <!-- Selected File Info -->
+            <div class="file-info" id="fileInfo" style="display:none">
+                <span class="file-icon">📄</span>
+                <div class="file-details">
+                    <span class="file-name" id="fileName"></span>
+                    <span class="file-size" id="fileSize"></span>
+                </div>
+                <button class="file-remove" onclick="removeFile()">×</button>
+            </div>
+
+            <!-- Title Input -->
+            <div class="form-group" id="titleGroup" style="display:none">
+                <label>Document Title (optional)</label>
+                <input type="text" id="docTitle"
+                       placeholder="Leave blank to use filename"/>
+            </div>
+
+            <!-- Progress -->
+            <div class="upload-progress" id="uploadProgress" style="display:none">
+                <div class="progress-step" id="step1">
+                    <span class="step-icon">⏳</span>
+                    <span>Uploading file...</span>
+                </div>
+                <div class="progress-step" id="step2">
+                    <span class="step-icon">⏳</span>
+                    <span>Extracting text...</span>
+                </div>
+                <div class="progress-step" id="step3">
+                    <span class="step-icon">⏳</span>
+                    <span>Generating embeddings...</span>
+                </div>
+                <div class="progress-step" id="step4">
+                    <span class="step-icon">⏳</span>
+                    <span>Building search index...</span>
+                </div>
+            </div>
+
+            <!-- Error/Success in modal -->
+            <div class="error-msg" id="uploadError"></div>
+            <div class="success-msg" id="uploadSuccess"></div>
+        </div>
+
+        <div class="modal-footer">
+            <button class="btn-secondary" onclick="closeUploadModal()">
+                Cancel
+            </button>
+            <button class="btn-primary" id="uploadBtn"
+                    onclick="uploadDocument()" style="width:auto; padding: 12px 28px;">
+                Upload
+            </button>
+        </div>
+    </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/js/app.js"></script>
+
+</body>
+</html>
+======================================================================
+FILE: static\frontend\login.html
+======================================================================
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AskDocs AI — Login</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<div class="auth-container">
+    <div class="auth-card">
+
+        <!-- Logo -->
+        <div class="auth-logo">
+            <h1>🧠 AskDocs AI</h1>
+            <p>AI-Powered Document Intelligence</p>
+        </div>
+
+        <h2>Welcome Back</h2>
+
+        <!-- Error Message -->
+        <div class="error-msg" id="errorMsg"></div>
+
+        <!-- Login Form -->
+        <div class="form-group">
+            <label for="username">Username</label>
+            <input
+                type="text"
+                id="username"
+                placeholder="Enter your username"
+                autocomplete="username"
+            />
+        </div>
+
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input
+                type="password"
+                id="password"
+                placeholder="Enter your password"
+                autocomplete="current-password"
+            />
+        </div>
+
+        <button class="btn-primary" id="loginBtn" onclick="handleLogin()">
+            Login
+        </button>
+
+        <div class="auth-footer">
+            Don't have an account?
+            <a href="register.html">Register here</a>
+        </div>
+
+    </div>
+</div>
+
+<script src="/js/auth.js"></script>
+
+</body>
+</html>
+======================================================================
+FILE: static\frontend\register.html
+======================================================================
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AskDocs AI — Register</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<div class="auth-container">
+    <div class="auth-card">
+
+        <!-- Logo -->
+        <div class="auth-logo">
+            <h1>🧠 AskDocs AI</h1>
+            <p>AI-Powered Document Intelligence</p>
+        </div>
+
+        <h2>Create Account</h2>
+
+        <!-- Messages -->
+        <div class="error-msg" id="errorMsg"></div>
+        <div class="success-msg" id="successMsg"></div>
+
+        <!-- Register Form -->
+        <div class="form-group">
+            <label for="username">Username</label>
+            <input
+                type="text"
+                id="username"
+                placeholder="Choose a username"
+            />
+        </div>
+
+        <div class="form-group">
+            <label for="email">Email</label>
+            <input
+                type="email"
+                id="email"
+                placeholder="Enter your email"
+            />
+        </div>
+
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input
+                type="password"
+                id="password"
+                placeholder="Min 8 characters"
+            />
+        </div>
+
+        <button class="btn-primary" id="registerBtn" onclick="handleRegister()">
+            Create Account
+        </button>
+
+        <div class="auth-footer">
+            Already have an account?
+            <a href="login.html">Login here</a>
+        </div>
+
+    </div>
+</div>
+
+<script src="/js/auth.js"></script>
+
+</body>
+</html>
+======================================================================
+FILE: static\frontend\css\app.css
+======================================================================
+/* ── App Layout ───────────────────────────────── */
+#app {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* ── Sidebar ──────────────────────────────────── */
+.sidebar {
+    width: 280px;
+    min-width: 280px;
+    background: #13131f;
+    border-right: 1px solid #2d2d3f;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    transition: transform 0.3s ease;
+}
+
+.sidebar-logo {
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid #2d2d3f;
+}
+
+.logo-icon { font-size: 24px; }
+
+.logo-text {
+    font-size: 18px;
+    font-weight: 700;
+    color: #7c6af7;
+    letter-spacing: 0.5px;
+}
+
+/* Upload Button */
+.upload-btn {
+    margin: 16px;
+    padding: 11px 16px;
+    background: linear-gradient(135deg, #7c6af7, #5b4fcf);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: opacity 0.2s;
+}
+
+.upload-btn:hover { opacity: 0.9; }
+
+.upload-btn span {
+    font-size: 20px;
+    line-height: 1;
+}
+
+/* Sidebar Sections */
+.sidebar-section {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+    min-height: 0;
+}
+
+.sidebar-section-title {
+    padding: 8px 16px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Document Items */
+.doc-item {
+    padding: 10px 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: background 0.15s;
+    border-radius: 6px;
+    margin: 2px 8px;
+}
+
+.doc-item:hover { background: #1e1e2e; }
+
+.doc-item-icon { font-size: 16px; flex-shrink: 0; }
+
+.doc-item-name {
+    font-size: 13px;
+    color: #ccc;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.doc-item-size {
+    font-size: 11px;
+    color: #555;
+    margin-top: 2px;
+}
+
+/* History Items */
+.history-item {
+    padding: 8px 16px;
+    cursor: pointer;
+    border-radius: 6px;
+    margin: 2px 8px;
+    transition: background 0.15s;
+}
+
+.history-item:hover { background: #1e1e2e; }
+
+.history-item-text {
+    font-size: 12px;
+    color: #888;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.empty-state-small {
+    padding: 12px 16px;
+    font-size: 12px;
+    color: #444;
+    font-style: italic;
+}
+
+/* Sidebar Footer */
+.sidebar-footer {
+    padding: 16px;
+    border-top: 1px solid #2d2d3f;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+}
+
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #7c6af7, #5b4fcf);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: white;
+    flex-shrink: 0;
+}
+
+.username {
+    font-size: 13px;
+    color: #aaa;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.logout-btn {
+    padding: 6px 12px;
+    background: transparent;
+    border: 1px solid #3d3d50;
+    border-radius: 6px;
+    color: #888;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.logout-btn:hover {
+    border-color: #ff6b7a;
+    color: #ff6b7a;
+}
+
+/* ── Main Content ─────────────────────────────── */
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    background: #0f0f1a;
+}
+
+/* Top Bar */
+.topbar {
+    padding: 16px 24px;
+    border-bottom: 1px solid #2d2d3f;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: #13131f;
+    flex-shrink: 0;
+}
+
+.menu-toggle {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px;
+    display: none;
+}
+
+.topbar-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #ddd;
+    flex: 1;
+}
+
+.topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    background: #28a745;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+.status-text {
+    font-size: 12px;
+    color: #28a745;
+}
+
+/* ── Chat Area ────────────────────────────────── */
+.chat-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+/* Welcome Screen */
+.welcome-screen {
+    text-align: center;
+    margin: auto;
+    padding: 40px 20px;
+    max-width: 500px;
+}
+
+.welcome-icon {
+    font-size: 64px;
+    margin-bottom: 20px;
+}
+
+.welcome-screen h2 {
+    font-size: 26px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 12px;
+}
+
+.welcome-screen p {
+    color: #888;
+    font-size: 15px;
+    line-height: 1.6;
+    margin-bottom: 28px;
+}
+
+.welcome-tips {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.tip {
+    background: #1e1e2e;
+    border: 1px solid #2d2d3f;
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 14px;
+    color: #aaa;
+    text-align: left;
+}
+
+/* ── Input Area ───────────────────────────────── */
+.input-area {
+    padding: 16px 24px 20px;
+    border-top: 1px solid #2d2d3f;
+    background: #13131f;
+    flex-shrink: 0;
+}
+
+.input-wrapper {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    background: #1e1e2e;
+    border: 1px solid #3d3d50;
+    border-radius: 12px;
+    padding: 10px 14px;
+    transition: border-color 0.2s;
+}
+
+.input-wrapper:focus-within {
+    border-color: #7c6af7;
+}
+
+.input-wrapper textarea {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: #fff;
+    font-size: 14px;
+    resize: none;
+    max-height: 120px;
+    line-height: 1.5;
+    font-family: inherit;
+}
+
+.input-wrapper textarea::placeholder { color: #555; }
+
+.send-btn {
+    width: 38px;
+    height: 38px;
+    background: linear-gradient(135deg, #7c6af7, #5b4fcf);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: opacity 0.2s;
+}
+
+.send-btn:hover { opacity: 0.85; }
+.send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.input-hint {
+    text-align: center;
+    font-size: 11px;
+    color: #444;
+    margin-top: 8px;
+}
+
+/* ── Modal ────────────────────────────────────── */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+
+.modal-overlay.show {
+    display: flex;
+}
+
+.modal {
+    background: #1e1e2e;
+    border: 1px solid #2d2d3f;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 480px;
+    margin: 20px;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+}
+
+.modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid #2d2d3f;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.modal-header h3 {
+    font-size: 17px;
+    font-weight: 600;
+    color: #fff;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 24px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+    transition: color 0.2s;
+}
+
+.modal-close:hover { color: #fff; }
+
+.modal-body { padding: 24px; }
+
+.modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid #2d2d3f;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.btn-secondary {
+    padding: 10px 20px;
+    background: transparent;
+    border: 1px solid #3d3d50;
+    border-radius: 8px;
+    color: #aaa;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+    border-color: #888;
+    color: #fff;
+}
+
+/* Drop Zone */
+.drop-zone {
+    border: 2px dashed #3d3d50;
+    border-radius: 12px;
+    padding: 36px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 16px;
+    background: #13131f;
+}
+
+.drop-zone:hover {
+    border-color: #7c6af7;
+    background: rgba(124, 106, 247, 0.05);
+    transform: scale(1.01);
+}
+
+.drop-zone.dragover {
+    border-color: #7c6af7;
+    background: rgba(124, 106, 247, 0.1);
+}
+
+.drop-icon {
+    font-size: 40px;
+    margin-bottom: 12px;
+}
+
+.drop-text {
+    font-size: 15px;
+    color: #ccc;
+    margin-bottom: 6px;
+    font-weight: 500;
+}
+
+.drop-hint {
+    font-size: 12px;
+    color: #555;
+}
+
+
+
+/* File Info */
+.file-info {
+    background: #252535;
+    border: 1px solid #3d3d50;
+    border-radius: 8px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.file-icon { font-size: 24px; }
+
+.file-details { flex: 1; overflow: hidden; }
+
+.file-name {
+    display: block;
+    font-size: 13px;
+    color: #ddd;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.file-size {
+    font-size: 11px;
+    color: #666;
+}
+
+.file-remove {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0;
+    transition: color 0.2s;
+}
+
+.file-remove:hover { color: #ff6b7a; }
+
+/* Upload Progress */
+.upload-progress {
+    background: #252535;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.progress-step {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    font-size: 13px;
+    color: #888;
+}
+
+.progress-step.done {
+    color: #28a745;
+}
+
+.progress-step.active {
+    color: #7c6af7;
+}
+
+.step-icon { font-size: 16px; }
+
+/* ── Responsive ───────────────────────────────── */
+@media (max-width: 768px) {
+    .sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        z-index: 100;
+        transform: translateX(-100%);
+    }
+
+    .sidebar.open {
+        transform: translateX(0);
+    }
+
+    .menu-toggle { display: block; }
+}
+
+/* ── Messages ─────────────────────────────────── */
+.message {
+    display: flex;
+    gap: 12px;
+    animation: fadeInUp 0.3s ease;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* User Message */
+.message.user {
+    flex-direction: row-reverse;
+}
+
+.message-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+    font-weight: 700;
+}
+
+.message.user .message-avatar {
+    background: linear-gradient(135deg, #7c6af7, #5b4fcf);
+    color: white;
+    font-size: 13px;
+}
+
+.message.ai .message-avatar {
+    background: linear-gradient(135deg, #1e3a5f, #0d2137);
+    border: 1px solid #2d4a6f;
+    font-size: 18px;
+}
+
+/* Bubble */
+.message-bubble {
+    max-width: 70%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.message.user .message-bubble {
+    align-items: flex-end;
+}
+
+.message-text {
+    padding: 12px 16px;
+    border-radius: 16px;
+    font-size: 14px;
+    line-height: 1.6;
+    word-wrap: break-word;
+}
+
+.message.user .message-text {
+    background: linear-gradient(135deg, #7c6af7, #5b4fcf);
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+
+.message.ai .message-text {
+    background: #1e1e2e;
+    border: 1px solid #2d2d3f;
+    color: #e0e0e0;
+    border-bottom-left-radius: 4px;
+}
+
+/* Sources */
+.message-sources {
+    background: #13131f;
+    border: 1px solid #2d2d3f;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 12px;
+}
+
+.sources-title {
+    color: #7c6af7;
+    font-weight: 600;
+    margin-bottom: 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.source-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #888;
+    padding: 3px 0;
+}
+
+.source-item span {
+    color: #aaa;
+}
+
+/* Timestamp */
+.message-time {
+    font-size: 11px;
+    color: #444;
+    padding: 0 4px;
+}
+
+/* ── Typing Indicator ─────────────────────────── */
+.typing-indicator {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    animation: fadeInUp 0.3s ease;
+}
+
+.typing-bubble {
+    background: #1e1e2e;
+    border: 1px solid #2d2d3f;
+    border-radius: 16px;
+    border-bottom-left-radius: 4px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.typing-dot {
+    width: 7px;
+    height: 7px;
+    background: #7c6af7;
+    border-radius: 50%;
+    animation: typingBounce 1.2s infinite;
+}
+
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typingBounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-6px); opacity: 1; }
+}
+
+/* ── Error Bubble ─────────────────────────────── */
+.message.error .message-text {
+    background: rgba(220, 53, 69, 0.1);
+    border: 1px solid rgba(220, 53, 69, 0.3);
+    color: #ff6b7a;
+}
+======================================================================
+FILE: static\frontend\css\style.css
+======================================================================
+/* ── Global Reset ─────────────────────────────── */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #0f0f1a;
+    color: #e0e0e0;
+    min-height: 100vh;
+}
+
+/* ── Auth Pages ───────────────────────────────── */
+.auth-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 100%);
+}
+
+.auth-card {
+    background: #1e1e2e;
+    border: 1px solid #2d2d3f;
+    border-radius: 16px;
+    padding: 40px;
+    width: 100%;
+    max-width: 420px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.auth-logo {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.auth-logo h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #7c6af7;
+    letter-spacing: 1px;
+}
+
+.auth-logo p {
+    color: #888;
+    font-size: 14px;
+    margin-top: 6px;
+}
+
+.auth-card h2 {
+    font-size: 22px;
+    font-weight: 600;
+    margin-bottom: 24px;
+    color: #fff;
+    text-align: center;
+}
+
+/* ── Form Elements ────────────────────────────── */
+.form-group {
+    margin-bottom: 18px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 13px;
+    color: #aaa;
+    margin-bottom: 6px;
+    font-weight: 500;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 12px 16px;
+    background: #252535;
+    border: 1px solid #3d3d50;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 14px;
+    transition: border-color 0.2s;
+    outline: none;
+}
+
+.form-group input:focus {
+    border-color: #7c6af7;
+    background: #2a2a3d;
+}
+
+.form-group input::placeholder {
+    color: #555;
+}
+
+/* ── Buttons ──────────────────────────────────── */
+.btn-primary {
+    width: 100%;
+    padding: 13px;
+    background: linear-gradient(135deg, #7c6af7, #5b4fcf);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+    margin-top: 8px;
+}
+
+.btn-primary:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+.btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* ── Messages ─────────────────────────────────── */
+.error-msg {
+    background: rgba(220, 53, 69, 0.15);
+    border: 1px solid rgba(220, 53, 69, 0.4);
+    color: #ff6b7a;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-bottom: 16px;
+    display: none;
+}
+
+.success-msg {
+    background: rgba(40, 167, 69, 0.15);
+    border: 1px solid rgba(40, 167, 69, 0.4);
+    color: #5cb85c;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-bottom: 16px;
+    display: none;
+}
+
+.error-msg.show,
+.success-msg.show {
+    display: block;
+}
+
+/* ── Auth Footer ──────────────────────────────── */
+.auth-footer {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 13px;
+    color: #888;
+}
+
+.auth-footer a {
+    color: #7c6af7;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.auth-footer a:hover {
+    text-decoration: underline;
+}
+
+/* ── Loading Spinner ──────────────────────────── */
+.spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+======================================================================
+FILE: static\frontend\js\app.js
+======================================================================
+// ── Auth Guard ─────────────────────────────────
+const token = localStorage.getItem('access_token');
+const username = localStorage.getItem('username') || 'User';
+
+if (!token) {
+    window.location.href = '/login';
+} else {
+    const appEl = document.getElementById('app');
+    if (appEl) appEl.style.display = 'flex';
+
+    const userDisplay = document.getElementById('usernameDisplay');
+    const userAvatar = document.getElementById('userAvatar');
+    if (userDisplay) userDisplay.textContent = username;
+    if (userAvatar) userAvatar.textContent = username.charAt(0).toUpperCase();
+}
+
+// ── API Helper ─────────────────────────────────
+async function apiCall(endpoint, method = 'GET', body = null) {
+    const headers = {
+        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        'Content-Type': 'application/json'
+    };
+    const options = { method, headers };
+    if (body) options.body = JSON.stringify(body);
+
+    const response = await fetch(`${API_BASE}${endpoint}`, options);
+    if (response.status === 401) {
+        localStorage.clear();
+        window.location.href = '/login';
+        return null;
+    }
+    return response;
+}
+
+// ── Load Documents ─────────────────────────────
+async function loadDocuments() {
+    try {
+        const response = await apiCall('/documents/');
+        if (!response) return;
+
+        const data = await response.json();
+        const docs = data.results || data;
+        const docList = document.getElementById('docList');
+
+        if (!docs || docs.length === 0) {
+            docList.innerHTML =
+                '<div class="empty-state-small">No documents yet</div>';
+            return;
+        }
+
+        docList.innerHTML = docs.map(doc => `
+            <div class="doc-item" title="${escapeHtml(doc.title)}">
+                <span class="doc-item-icon">📄</span>
+                <div>
+                    <div class="doc-item-name">${escapeHtml(doc.title)}</div>
+                    <div class="doc-item-size">
+                        ${formatFileSize(doc.file_size)} ·
+                        ${doc.is_processed ? '✅ Ready' : '⏳ Processing'}
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+    } catch (error) {
+        console.error('Failed to load documents:', error);
+    }
+}
+
+// ── Load History ───────────────────────────────
+async function loadHistory() {
+    try {
+        const response = await apiCall('/qa/history/?limit=10');
+        if (!response) return;
+
+        const data = await response.json();
+        const logs = data.results || [];
+        const historyList = document.getElementById('historyList');
+
+        if (logs.length === 0) {
+            historyList.innerHTML =
+                '<div class="empty-state-small">No history yet</div>';
+            return;
+        }
+
+        historyList.innerHTML = logs.map(log => `
+            <div class="history-item"
+                 onclick="loadHistoryQuestion('${escapeHtml(log.question)}')"
+                 title="${escapeHtml(log.question)}">
+                <div class="history-item-text">
+                    💬 ${escapeHtml(log.question)}
+                </div>
+            </div>
+        `).join('');
+
+    } catch (error) {
+        console.error('Failed to load history:', error);
+    }
+}
+
+function loadHistoryQuestion(question) {
+    document.getElementById('questionInput').value = question;
+    document.getElementById('questionInput').focus();
+}
+
+// ── Send Question ──────────────────────────────
+async function sendQuestion() {
+    const input = document.getElementById('questionInput');
+    const question = input.value.trim();
+
+    if (!question) return;
+
+    // Hide welcome screen on first message
+    const welcomeScreen = document.getElementById('welcomeScreen');
+    if (welcomeScreen) welcomeScreen.style.display = 'none';
+
+    // Clear input
+    input.value = '';
+    input.style.height = 'auto';
+
+    // Disable send button
+    const sendBtn = document.getElementById('sendBtn');
+    sendBtn.disabled = true;
+
+    // Show user message
+    appendUserMessage(question);
+
+    // Show typing indicator
+    const typingId = showTypingIndicator();
+
+    try {
+        const response = await apiCall('/qa/ask/', 'POST', { question });
+
+        // Remove typing indicator
+        removeTypingIndicator(typingId);
+
+        if (!response) return;
+
+        const data = await response.json();
+
+        if (response.ok) {
+            appendAIMessage(data.answer, data.sources);
+            // Refresh history sidebar
+            loadHistory();
+        } else {
+            appendErrorMessage(data.error || 'Something went wrong.');
+        }
+
+    } catch (error) {
+        removeTypingIndicator(typingId);
+        appendErrorMessage('Cannot connect to server. Make sure Django is running.');
+    } finally {
+        sendBtn.disabled = false;
+    }
+}
+
+// ── Append User Message ────────────────────────
+function appendUserMessage(text) {
+    const container = document.getElementById('messagesContainer');
+    const initial = username.charAt(0).toUpperCase();
+
+    const div = document.createElement('div');
+    div.className = 'message user';
+    div.innerHTML = `
+        <div class="message-avatar">${initial}</div>
+        <div class="message-bubble">
+            <div class="message-text">${escapeHtml(text)}</div>
+            <div class="message-time">${getTime()}</div>
+        </div>
+    `;
+    container.appendChild(div);
+    scrollToBottom();
+}
+
+// ── Append AI Message ──────────────────────────
+function appendAIMessage(answer, sources) {
+    const container = document.getElementById('messagesContainer');
+
+    // Build sources HTML
+    let sourcesHtml = '';
+    if (sources && sources.length > 0) {
+        const sourceItems = sources.map(s => `
+            <div class="source-item">
+                📄 <span>${escapeHtml(s.document)}</span>
+                — Page ${s.page}
+            </div>
+        `).join('');
+
+        sourcesHtml = `
+            <div class="message-sources">
+                <div class="sources-title">📌 Sources</div>
+                ${sourceItems}
+            </div>
+        `;
+    }
+
+    const div = document.createElement('div');
+    div.className = 'message ai';
+    div.innerHTML = `
+        <div class="message-avatar">🧠</div>
+        <div class="message-bubble">
+            <div class="message-text">${escapeHtml(answer)}</div>
+            ${sourcesHtml}
+            <div class="message-time">${getTime()}</div>
+        </div>
+    `;
+    container.appendChild(div);
+    scrollToBottom();
+}
+
+// ── Append Error Message ───────────────────────
+function appendErrorMessage(text) {
+    const container = document.getElementById('messagesContainer');
+    const div = document.createElement('div');
+    div.className = 'message ai error';
+    div.innerHTML = `
+        <div class="message-avatar">⚠️</div>
+        <div class="message-bubble">
+            <div class="message-text">${escapeHtml(text)}</div>
+        </div>
+    `;
+    container.appendChild(div);
+    scrollToBottom();
+}
+
+// ── Typing Indicator ───────────────────────────
+function showTypingIndicator() {
+    const container = document.getElementById('messagesContainer');
+    const id = 'typing-' + Date.now();
+    const div = document.createElement('div');
+    div.className = 'typing-indicator';
+    div.id = id;
+    div.innerHTML = `
+        <div class="message-avatar" style="
+            width:36px; height:36px; border-radius:50%;
+            background: linear-gradient(135deg, #1e3a5f, #0d2137);
+            border: 1px solid #2d4a6f;
+            display:flex; align-items:center;
+            justify-content:center; font-size:18px;">
+            🧠
+        </div>
+        <div class="typing-bubble">
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+        </div>
+    `;
+    container.appendChild(div);
+    scrollToBottom();
+    return id;
+}
+
+function removeTypingIndicator(id) {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+}
+
+// ── Helpers ────────────────────────────────────
+function scrollToBottom() {
+    const chatArea = document.getElementById('chatArea');
+    chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+function getTime() {
+    return new Date().toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(text));
+    return div.innerHTML;
+}
+
+function autoResize(textarea) {
+    textarea.style.height = 'auto';
+    textarea.style.height = textarea.scrollHeight + 'px';
+}
+
+function handleKeyDown(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendQuestion();
+    }
+}
+
+// ── Sidebar & Logout ───────────────────────────
+function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+}
+
+function handleLogout() {
+    localStorage.clear();
+    window.location.href = '/login';
+}
+
+// ── Upload Modal ───────────────────────────────
+function openUploadModal() {
+    document.getElementById('uploadModal').classList.add('show');
+    resetUploadModal();
+}
+
+function closeUploadModal() {
+    document.getElementById('uploadModal').classList.remove('show');
+    resetUploadModal();
+}
+
+function resetUploadModal() {
+    document.getElementById('fileInput').value = '';
+    document.getElementById('fileInfo').style.display = 'none';
+    document.getElementById('titleGroup').style.display = 'none';
+    document.getElementById('uploadProgress').style.display = 'none';
+    document.getElementById('docTitle').value = '';
+
+    const errorEl = document.getElementById('uploadError');
+    const successEl = document.getElementById('uploadSuccess');
+    errorEl.classList.remove('show');
+    successEl.classList.remove('show');
+
+    const uploadBtn = document.getElementById('uploadBtn');
+    uploadBtn.disabled = false;
+    uploadBtn.textContent = 'Upload';
+}
+
+function triggerFileInput() {
+    document.getElementById('fileInput').click();
+}
+
+function handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+        alert('Only PDF files are supported.');
+        return;
+    }
+
+    document.getElementById('fileName').textContent = file.name;
+    document.getElementById('fileSize').textContent = formatFileSize(file.size);
+    document.getElementById('fileInfo').style.display = 'flex';
+    document.getElementById('titleGroup').style.display = 'block';
+}
+
+function removeFile() {
+    document.getElementById('fileInput').value = '';
+    document.getElementById('fileInfo').style.display = 'none';
+    document.getElementById('titleGroup').style.display = 'none';
+}
+
+// ── Upload Document ────────────────────────────
+async function uploadDocument() {
+    const fileInput = document.getElementById('fileInput');
+    const file = fileInput.files[0];
+
+    if (!file) {
+        const errorEl = document.getElementById('uploadError');
+        errorEl.textContent = 'Please select a PDF file first.';
+        errorEl.classList.add('show');
+        return;
+    }
+
+    const title = document.getElementById('docTitle').value.trim() || file.name;
+    const uploadBtn = document.getElementById('uploadBtn');
+
+    uploadBtn.disabled = true;
+    uploadBtn.textContent = 'Uploading...';
+
+    // Show progress
+    document.getElementById('uploadProgress').style.display = 'block';
+    setStep(1, 'active');
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('title', title);
+
+    try {
+        setStep(1, 'active');
+        await delay(300);
+
+        const response = await fetch(`${API_BASE}/documents/upload/`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            },
+            body: formData
+        });
+
+        setStep(2, 'active');
+        await delay(500);
+        setStep(3, 'active');
+        await delay(500);
+        setStep(4, 'active');
+        await delay(300);
+
+        const data = await response.json();
+
+        if (response.ok) {
+            // Mark all steps done
+            [1, 2, 3, 4].forEach(i => setStepDone(i));
+
+            const successEl = document.getElementById('uploadSuccess');
+            successEl.textContent = '✅ Document uploaded and processed successfully!';
+            successEl.classList.add('show');
+
+            uploadBtn.textContent = 'Done ✓';
+
+            // Refresh documents list in sidebar
+            await loadDocuments();
+
+            // Close modal after 2 seconds
+            setTimeout(() => closeUploadModal(), 2000);
+
+        } else {
+            const errorEl = document.getElementById('uploadError');
+            errorEl.textContent = data.error || 'Upload failed. Please try again.';
+            errorEl.classList.add('show');
+            uploadBtn.disabled = false;
+            uploadBtn.textContent = 'Try Again';
+        }
+
+        } catch (error) {
+        const errorEl = document.getElementById('uploadError');
+        errorEl.textContent = 'Cannot connect to server. Make sure Django is running.';
+        errorEl.classList.add('show');
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = 'Try Again';
+    }
+}
+
+function setStep(num, status) {
+    const step = document.getElementById(`step${num}`);
+    if (!step) return;
+
+    step.className = `progress-step ${status}`;
+    const icon = step.querySelector('.step-icon');
+
+    if (status === 'done') {
+        icon.textContent = '✅';
+    } else if (status === 'active') {
+        icon.textContent = '⏳';
+        // Mark previous steps as done
+        for (let i = 1; i < num; i++) {
+            setStepDone(i);
+        }
+    } else {
+        icon.textContent = '⬜';
+    }
+}
+
+function setStepDone(num) {
+    const step = document.getElementById(`step${num}`);
+    if (!step) return;
+    step.className = 'progress-step done';
+    const icon = step.querySelector('.step-icon');
+    if (icon) icon.textContent = '✅';
+}
+
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ── Initialize ─────────────────────────────────
+loadDocuments();
+loadHistory();
+
+// ── Drag & Drop Support ────────────────────────
+const dropZone = document.getElementById('dropZone');
+if (dropZone) {
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+
+        const file = e.dataTransfer.files[0];
+        if (!file) return;
+
+        if (!file.name.toLowerCase().endsWith('.pdf')) {
+            alert('Only PDF files are supported.');
+            return;
+        }
+
+        // Simulate file input selection
+        const fileInput = document.getElementById('fileInput');
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        fileInput.files = dataTransfer.files;
+
+        // Show file info
+        document.getElementById('fileName').textContent = file.name;
+        document.getElementById('fileSize').textContent =
+            formatFileSize(file.size);
+        document.getElementById('fileInfo').style.display = 'flex';
+        document.getElementById('titleGroup').style.display = 'block';
+    });
+}
+======================================================================
+FILE: static\frontend\js\auth.js
+======================================================================
+const API_BASE = 'http://127.0.0.1:8000/api';
+
+// ── Helper Functions ───────────────────────────
+
+function showError(msg) {
+    const el = document.getElementById('errorMsg');
+    el.textContent = msg;
+    el.classList.add('show');
+}
+
+function hideError() {
+    const el = document.getElementById('errorMsg');
+    el.classList.remove('show');
+}
+
+function showSuccess(msg) {
+    const el = document.getElementById('successMsg');
+    if (el) {
+        el.textContent = msg;
+        el.classList.add('show');
+    }
+}
+
+function setLoading(btnId, loading) {
+    const btn = document.getElementById(btnId);
+    if (loading) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Please wait...';
+    } else {
+        btn.disabled = false;
+        btn.innerHTML = btnId === 'loginBtn' ? 'Login' : 'Create Account';
+    }
+}
+
+// ── Check if Already Logged In ─────────────────
+// If user visits login page but already has token,
+// redirect to main app
+if (window.location.pathname.includes('login') ||
+    window.location.pathname.includes('register')) {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+        window.location.href = '/app';
+    }
+}
+
+// ── Login Handler ──────────────────────────────
+async function handleLogin() {
+    hideError();
+
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+
+    // Basic validation
+    if (!username || !password) {
+        showError('Please enter both username and password.');
+        return;
+    }
+
+    setLoading('loginBtn', true);
+
+    try {
+        const response = await fetch(`${API_BASE}/auth/login/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            // Save tokens to localStorage
+            localStorage.setItem('access_token', data.access);
+            localStorage.setItem('refresh_token', data.refresh);
+            localStorage.setItem('username', username);
+
+            // Redirect to main app
+            window.location.href = '/app';
+        } else {
+            showError(data.detail || 'Invalid username or password.');
+        }
+
+    } catch (error) {
+        showError('Cannot connect to server. Make sure Django is running.');
+    } finally {
+        setLoading('loginBtn', false);
+    }
+}
+
+// ── Register Handler ───────────────────────────
+async function handleRegister() {
+    hideError();
+
+    const username = document.getElementById('username').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+
+    // Validation
+    if (!username || !email || !password) {
+        showError('Please fill in all fields.');
+        return;
+    }
+
+    if (password.length < 8) {
+        showError('Password must be at least 8 characters.');
+        return;
+    }
+
+    setLoading('registerBtn', true);
+
+    try {
+        const response = await fetch(`${API_BASE}/auth/register/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, email, password, role: 'user' })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            showSuccess('Account created! Redirecting to login...');
+            setTimeout(() => {
+                window.location.href = '/login';
+            }, 1500);
+        } else {
+            // Show first error message from API
+            const firstError = Object.values(data)[0];
+            showError(Array.isArray(firstError) ? firstError[0] : firstError);
+        }
+
+    } catch (error) {
+        showError('Cannot connect to server. Make sure Django is running.');
+    } finally {
+        setLoading('registerBtn', false);
+    }
+}
+
+// ── Enter Key Support ──────────────────────────
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        const loginBtn = document.getElementById('loginBtn');
+        const registerBtn = document.getElementById('registerBtn');
+        if (loginBtn) handleLogin();
+        if (registerBtn) handleRegister();
+    }
+});
+======================================================================
+FILE: users\admin.py
+======================================================================
+from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin
+from .models import CustomUser
+
+class CustomUserAdmin(UserAdmin):
+    model = CustomUser
+    list_display = ('username', 'email', 'role', 'is_staff')
+    fieldsets = UserAdmin.fieldsets + (
+        ('Role', {'fields': ('role',)}),
+    )
+
+admin.site.register(CustomUser, CustomUserAdmin)
+======================================================================
+FILE: users\apps.py
+======================================================================
+from django.apps import AppConfig
+
+
+class UsersConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'users'
+
+======================================================================
+FILE: users\models.py
+======================================================================
+from django.contrib.auth.models import AbstractUser
+from django.db import models
+
+class CustomUser(AbstractUser):
+    ROLE_CHOICES = (
+        ('admin', 'Admin'),
+        ('user', 'User'),
+    )
+    role = models.CharField(
+        max_length=10,
+        choices=ROLE_CHOICES,
+        default='user'
+    )
+
+    def __str__(self):
+        return f"{self.username} ({self.role})"
+======================================================================
+FILE: users\serializers.py
+======================================================================
+from rest_framework import serializers
+from django.contrib.auth.password_validation import validate_password
+from .models import CustomUser
+
+class RegisterSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(
+        write_only=True,
+        required=True,
+        validators=[validate_password]
+    )
+
+    class Meta:
+        model = CustomUser
+        fields = ('username', 'email', 'password', 'role')
+
+    def create(self, validated_data):
+        user = CustomUser.objects.create_user(
+            username=validated_data['username'],
+            email=validated_data['email'],
+            password=validated_data['password'],
+            role=validated_data.get('role', 'user')
+        )
+        return user
+
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fields = ('id', 'username', 'email', 'role', 'date_joined')
+======================================================================
+FILE: users\tests.py
+======================================================================
+from django.test import TestCase
+
+# Create your tests here.
+
+======================================================================
+FILE: users\urls.py
+======================================================================
+from django.urls import path
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from .views import RegisterView, ProfileView, AdminUserListView
+
+urlpatterns = [
+    path('register/', RegisterView.as_view(), name='register'),
+    path('login/', TokenObtainPairView.as_view(), name='login'),
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('profile/', ProfileView.as_view(), name='profile'),
+    path('admin/users/', AdminUserListView.as_view(), name='admin-users'),
+]
+======================================================================
+FILE: users\views.py
+======================================================================
+from rest_framework import generics, permissions
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from .serializers import RegisterSerializer, UserProfileSerializer
+from .models import CustomUser
+
+# Anyone can register (no token needed)
+class RegisterView(generics.CreateAPIView):
+    queryset = CustomUser.objects.all()
+    serializer_class = RegisterSerializer
+    permission_classes = [permissions.AllowAny]
+
+
+# Only logged-in users can see their profile
+class ProfileView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        serializer = UserProfileSerializer(request.user)
+        return Response(serializer.data)
+
+
+# Only admins can see all users
+class AdminUserListView(generics.ListAPIView):
+    queryset = CustomUser.objects.all()
+    serializer_class = UserProfileSerializer
+    permission_classes = [permissions.IsAdminUser]
+======================================================================
+FILE: users\__init__.py
+======================================================================
+
+======================================================================
+FILE: users\migrations\0001_initial.py
+======================================================================
+# Generated by Django 5.2.12 on 2026-03-24 08:04
+
+import django.contrib.auth.models
+import django.contrib.auth.validators
+import django.utils.timezone
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    initial = True
+
+    dependencies = [
+        ('auth', '0012_alter_user_first_name_max_length'),
+    ]
+
+    operations = [
+        migrations.CreateModel(
+            name='CustomUser',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('password', models.CharField(max_length=128, verbose_name='password')),
+                ('last_login', models.DateTimeField(blank=True, null=True, verbose_name='last login')),
+                ('is_superuser', models.BooleanField(default=False, help_text='Designates that this user has all permissions without explicitly assigning them.', verbose_name='superuser status')),
+                ('username', models.CharField(error_messages={'unique': 'A user with that username already exists.'}, help_text='Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.', max_length=150, unique=True, validators=[django.contrib.auth.validators.UnicodeUsernameValidator()], verbose_name='username')),
+                ('first_name', models.CharField(blank=True, max_length=150, verbose_name='first name')),
+                ('last_name', models.CharField(blank=True, max_length=150, verbose_name='last name')),
+                ('email', models.EmailField(blank=True, max_length=254, verbose_name='email address')),
+                ('is_staff', models.BooleanField(default=False, help_text='Designates whether the user can log into this admin site.', verbose_name='staff status')),
+                ('is_active', models.BooleanField(default=True, help_text='Designates whether this user should be treated as active. Unselect this instead of deleting accounts.', verbose_name='active')),
+                ('date_joined', models.DateTimeField(default=django.utils.timezone.now, verbose_name='date joined')),
+                ('role', models.CharField(choices=[('admin', 'Admin'), ('user', 'User')], default='user', max_length=10)),
+                ('groups', models.ManyToManyField(blank=True, help_text='The groups this user belongs to. A user will get all permissions granted to each of their groups.', related_name='user_set', related_query_name='user', to='auth.group', verbose_name='groups')),
+                ('user_permissions', models.ManyToManyField(blank=True, help_text='Specific permissions for this user.', related_name='user_set', related_query_name='user', to='auth.permission', verbose_name='user permissions')),
+            ],
+            options={
+                'verbose_name': 'user',
+                'verbose_name_plural': 'users',
+                'abstract': False,
+            },
+            managers=[
+                ('objects', django.contrib.auth.models.UserManager()),
+            ],
+        ),
+    ]
+
+======================================================================
+FILE: users\migrations\__init__.py
+======================================================================

@@ -251,14 +251,12 @@ def save_query_to_db(user, question, answer, chunks):
 
 def answer_question(question, user=None):
     """
-    Main Q&A pipeline:
-    1. Validate question
-    2. Search for relevant chunks
-    3. Build context
-    4. Extract clean answer
-    5. Build sources
-    6. Save to DB
-    7. Return structured response
+    Main Q&A pipeline with Hugging Face QA model:
+    1. Search relevant chunks via FAISS
+    2. Build context
+    3. Try HuggingFace QA model for precise answer
+    4. Fall back to extractive scoring if model fails
+    5. Return structured response
     """
     if not question or not question.strip():
         return {
@@ -280,15 +278,24 @@ def answer_question(question, user=None):
         }
 
     # Step 2: Build context
-    context = build_context(chunks, max_words=800)
+    context = build_context(chunks, max_words=400)
 
-    # Step 3: Extract answer
-    answer = extract_answer(question, context)
-
-    # Step 4: Build sources
+    # Step 3: Build sources
     sources_data, chunks_for_db = build_sources(chunks)
 
-    # Step 5: Save to DB
+    # Step 4: Try HuggingFace QA model
+    print("Running QA model...")
+    from .llm import generate_answer_with_model
+    answer = generate_answer_with_model(question, context)
+
+    if answer:
+        print(f"✅ Model answered: {answer[:100]}")
+    else:
+        # Step 5: Fall back to extractive answer
+        print("⚠️ Model fallback to extractive answer...")
+        answer = extract_answer(question, context)
+
+    # Step 6: Save to DB
     if user:
         save_query_to_db(user, question, answer, chunks_for_db)
 

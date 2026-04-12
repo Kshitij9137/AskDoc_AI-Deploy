@@ -365,14 +365,23 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.views.generic import RedirectView
+from django.http import HttpResponse
 import os
+
+
+def favicon(request):
+    return HttpResponse(status=204)
+
 
 def serve_frontend(request, filename):
     from django.http import FileResponse, Http404
-    file_path = os.path.join(settings.BASE_DIR, 'static', 'frontend', filename)
+    file_path = os.path.join(
+        settings.BASE_DIR, 'static', 'frontend', filename
+    )
     if os.path.exists(file_path):
         return FileResponse(open(file_path, 'rb'))
     raise Http404
+
 
 def serve_frontend_asset(request, folder, filename):
     from django.http import FileResponse, Http404
@@ -383,11 +392,13 @@ def serve_frontend_asset(request, folder, filename):
         return FileResponse(open(file_path, 'rb'))
     raise Http404
 
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/auth/', include('users.urls')),
     path('api/documents/', include('documents.urls')),
     path('api/qa/', include('qa_engine.urls')),
+    path('favicon.ico', favicon),
 
     # Serve frontend pages
     path('', RedirectView.as_view(url='/login')),
@@ -1409,7 +1420,7 @@ FILE: documents\migrations\__init__.py
 ======================================================================
 FILE: faiss_index\chunk_map.json
 ======================================================================
-{"0": 478, "1": 479, "2": 480, "3": 481, "4": 482, "5": 483, "6": 484, "7": 485, "8": 486, "9": 487, "10": 488, "11": 489, "12": 490}
+{"0": 549, "1": 550, "2": 551, "3": 552, "4": 553, "5": 554, "6": 555, "7": 556, "8": 557, "9": 558, "10": 559, "11": 560, "12": 561, "13": 562, "14": 563, "15": 564, "16": 565, "17": 566, "18": 567, "19": 568, "20": 569, "21": 570, "22": 571, "23": 572, "24": 573, "25": 574, "26": 575, "27": 576, "28": 577, "29": 578, "30": 579, "31": 580, "32": 581, "33": 582, "34": 583, "35": 584, "36": 585, "37": 586, "38": 587}
 ======================================================================
 FILE: qa_engine\admin.py
 ======================================================================
@@ -1461,20 +1472,35 @@ print("QA model loaded! ✅")
 
 def clean_for_model(text):
     """
-    Clean text before sending to QA model.
-    Remove special characters that confuse tokenizer.
+    Aggressively clean text before sending to QA model.
     """
     # Remove bullet points and special chars
-    text = re.sub(r'[◦▪•●▸▹►]', '', text)
-    # Remove multiple spaces
-    text = re.sub(r' +', ' ', text)
-    # Remove lines starting with symbols
+    text = re.sub(r'[◦▪•●▸▹►◆▷]', '', text)
+
+    # Remove lines starting with POST/GET API paths
     lines = text.split('\n')
-    clean_lines = [
-        l.strip() for l in lines
-        if l.strip() and len(l.strip()) > 5
-    ]
-    return ' '.join(clean_lines)
+    clean_lines = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        # Skip API endpoint lines
+        if re.match(r'^(POST|GET|PUT|DELETE)\s+/api', line):
+            continue
+        # Skip lines that are mostly symbols
+        if len(re.findall(r'[a-zA-Z]', line)) < len(line) * 0.3:
+            continue
+        # Skip very short lines
+        if len(line.split()) < 4:
+            continue
+        clean_lines.append(line)
+
+    text = ' '.join(clean_lines)
+
+    # Clean up extra whitespace
+    text = re.sub(r'\s+', ' ', text)
+
+    return text.strip()
 
 
 def score_sentence_with_model(question, sentence):
@@ -1822,12 +1848,27 @@ def extract_answer(question, context):
     scored.sort(key=lambda x: x[0], reverse=True)
 
     if not scored:
-        # Fallback — return first clean sentence from context
+        # Fallback — find best clean sentence from context
+        best_fallback = None
+        best_length = 0
         for sentence in sentences:
             sentence = sentence.strip()
-            if (len(sentence.split()) >= 10
-                    and not is_noise_sentence(sentence)):
-                return sentence
+            # Skip noise
+            if is_noise_sentence(sentence):
+                continue
+            # Skip bullet point heavy sentences
+            if sentence.count('◦') + sentence.count('•') > 2:
+                continue
+            # Skip API path sentences
+            if '/api/' in sentence:
+                continue
+            word_count = len(sentence.split())
+            if word_count >= 15 and word_count > best_length:
+                best_length = word_count
+                best_fallback = sentence
+
+        if best_fallback:
+            return best_fallback
         return "I found related content but could not extract a clear answer. Please try rephrasing your question."
 
     # Take top 3 sentences
@@ -2208,189 +2249,286 @@ FILE: static\frontend\index.html
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AskDocs AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
 
-<!-- Auth Guard: redirect to login if not logged in -->
+<!-- Background canvas -->
+<canvas id="bgCanvas"></canvas>
+
 <div id="app" style="display:none; width:100%; height:100vh;">
 
-    <!-- ── SIDEBAR ─────────────────────────────── -->
+    <!-- ══════════════ SIDEBAR ══════════════ -->
     <aside class="sidebar" id="sidebar">
+
+        <!-- Glass noise overlay -->
+        <div class="sidebar-glass"></div>
 
         <!-- Logo -->
         <div class="sidebar-logo">
-            <span class="logo-icon">🧠</span>
-            <span class="logo-text">AskDocs AI</span>
+            <div class="logo-gem">
+                <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
+                    <path d="M16 2L28 9V23L16 30L4 23V9L16 2Z" fill="url(#gemGrad)" stroke="rgba(255,255,255,0.2)" stroke-width="0.5"/>
+                    <path d="M16 2L28 9L16 16L4 9L16 2Z" fill="url(#gemTop)"/>
+                    <path d="M16 16V30L4 23V9L16 16Z" fill="url(#gemLeft)"/>
+                    <path d="M16 16V30L28 23V9L16 16Z" fill="url(#gemRight)"/>
+                    <defs>
+                        <linearGradient id="gemGrad" x1="4" y1="2" x2="28" y2="30">
+                            <stop stop-color="#22d3ee"/>
+                            <stop offset="1" stop-color="#818cf8"/>
+                        </linearGradient>
+                        <linearGradient id="gemTop" x1="4" y1="2" x2="28" y2="16" gradientUnits="userSpaceOnUse">
+                            <stop stop-color="rgba(255,255,255,0.6)"/>
+                            <stop offset="1" stop-color="rgba(34,211,238,0.3)"/>
+                        </linearGradient>
+                        <linearGradient id="gemLeft" x1="4" y1="9" x2="16" y2="30" gradientUnits="userSpaceOnUse">
+                            <stop stop-color="rgba(34,211,238,0.15)"/>
+                            <stop offset="1" stop-color="rgba(34,211,238,0.05)"/>
+                        </linearGradient>
+                        <linearGradient id="gemRight" x1="28" y1="9" x2="16" y2="30" gradientUnits="userSpaceOnUse">
+                            <stop stop-color="rgba(129,140,248,0.3)"/>
+                            <stop offset="1" stop-color="rgba(129,140,248,0.1)"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+            </div>
+            <div class="logo-wordmark">
+                <span class="logo-ask">Ask</span><span class="logo-docs">Docs</span>
+            </div>
+            <div class="logo-badge">AI</div>
         </div>
 
-        <!-- Upload Button -->
-        <button class="upload-btn" onclick="openUploadModal()">
-            <span>+</span> Upload Document
-        </button>
-
-        <!-- Documents List -->
-        <div class="sidebar-section">
-            <div class="sidebar-section-title">📄 Documents</div>
-            <div class="doc-list" id="docList">
-                <div class="empty-state-small">No documents yet</div>
-            </div>
-        </div>
-
-        <!-- Chat History -->
-        <div class="sidebar-section">
-            <div class="sidebar-section-title">🕐 Recent Questions</div>
-            <div class="history-list" id="historyList">
-                <div class="empty-state-small">No history yet</div>
-            </div>
-        </div>
-
-        <!-- Sidebar Footer -->
-        <div class="sidebar-footer">
-            <div class="user-info">
-                <div class="user-avatar" id="userAvatar">K</div>
-                <span class="username" id="usernameDisplay">User</span>
-            </div>
-            <button class="logout-btn" onclick="handleLogout()">
-                Logout
+        <!-- New chat / Upload -->
+        <div class="sidebar-actions">
+            <button class="btn-upload" onclick="openUploadModal()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Upload PDF
             </button>
         </div>
 
-    </aside>
-
-    <!-- ── MAIN CONTENT ────────────────────────── -->
-    <main class="main-content">
-
-        <!-- Top Bar -->
-        <div class="topbar">
-            <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
-            <h2 class="topbar-title">Chat with your Documents</h2>
-            <div class="topbar-right">
-                <span class="status-dot"></span>
-                <span class="status-text">AI Ready</span>
+        <!-- Documents -->
+        <div class="sidebar-block">
+            <div class="sidebar-block-header">
+                <span class="sidebar-label">Library</span>
+                <span class="sidebar-count" id="docCount">0</span>
+            </div>
+            <div class="doc-list" id="docList">
+                <div class="sidebar-empty">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" opacity="0.3">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="currentColor" stroke-width="1.5"/>
+                        <polyline points="14 2 14 8 20 8" stroke="currentColor" stroke-width="1.5"/>
+                    </svg>
+                    <p>No documents yet</p>
+                </div>
             </div>
         </div>
 
-        <!-- Chat Area -->
+        <!-- Divider -->
+        <div class="sidebar-divider"></div>
+
+        <!-- History -->
+        <div class="sidebar-block sidebar-block--flex">
+            <div class="sidebar-block-header">
+                <span class="sidebar-label">History</span>
+            </div>
+            <div class="history-list" id="historyList">
+                <div class="sidebar-empty">
+                    <p>Ask your first question</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="sidebar-footer">
+            <div class="user-row">
+                <div class="user-avatar" id="userAvatar">A</div>
+                <div class="user-meta">
+                    <span class="username" id="usernameDisplay">User</span>
+                    <span class="user-role">Member</span>
+                </div>
+            </div>
+            <button class="btn-logout" onclick="handleLogout()" title="Sign out">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                    <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    <polyline points="16 17 21 12 16 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <line x1="21" y1="12" x2="9" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+            </button>
+        </div>
+    </aside>
+
+    <!-- ══════════════ MAIN ══════════════ -->
+    <main class="main-content">
+
+        <!-- Top bar -->
+        <header class="topbar">
+            <button class="menu-toggle" onclick="toggleSidebar()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path d="M3 12h18M3 6h18M3 18h18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+            </button>
+
+            <div class="topbar-pill">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="3" fill="currentColor"/>
+                    <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                Semantic AI Engine
+            </div>
+
+            <div class="topbar-status">
+                <span class="status-ring"></span>
+                Online
+            </div>
+        </header>
+
+        <!-- Chat zone -->
         <div class="chat-area" id="chatArea">
 
-            <!-- Welcome Message -->
+            <!-- Welcome -->
             <div class="welcome-screen" id="welcomeScreen">
-                <div class="welcome-icon">🧠</div>
-                <h2>Welcome to AskDocs AI</h2>
-                <p>Upload a PDF document and start asking questions.<br>
-                The AI will find relevant answers with source references.</p>
-                <div class="welcome-tips">
-                    <div class="tip">📤 Upload a PDF from the sidebar</div>
-                    <div class="tip">💬 Ask any question about your document</div>
-                    <div class="tip">📌 Get answers with page references</div>
+                <div class="welcome-hero">
+                    <div class="hero-orb">
+                        <div class="hero-orb-inner"></div>
+                        <div class="hero-orb-ring ring-1"></div>
+                        <div class="hero-orb-ring ring-2"></div>
+                        <div class="hero-orb-ring ring-3"></div>
+                        <svg class="hero-icon" width="32" height="32" viewBox="0 0 32 32" fill="none">
+                            <path d="M16 2L28 9V23L16 30L4 23V9L16 2Z" fill="white" fill-opacity="0.9"/>
+                        </svg>
+                    </div>
+                </div>
+                <h1 class="welcome-heading">What do you want to know?</h1>
+                <p class="welcome-subtext">Upload your PDFs and ask anything. I'll find the answer<br>with precise source citations from your documents.</p>
+                <div class="prompt-grid">
+                    <button class="prompt-card" onclick="usePrompt(this)">
+                        <div class="prompt-icon">📋</div>
+                        <span>Summarize this document</span>
+                    </button>
+                    <button class="prompt-card" onclick="usePrompt(this)">
+                        <div class="prompt-icon">🔍</div>
+                        <span>What are the key findings?</span>
+                    </button>
+                    <button class="prompt-card" onclick="usePrompt(this)">
+                        <div class="prompt-icon">⚙️</div>
+                        <span>What technologies are used?</span>
+                    </button>
+                    <button class="prompt-card" onclick="usePrompt(this)">
+                        <div class="prompt-icon">🎯</div>
+                        <span>What are the main objectives?</span>
+                    </button>
                 </div>
             </div>
 
-            <!-- Messages will appear here -->
+            <!-- Messages -->
             <div class="messages-container" id="messagesContainer"></div>
-
         </div>
 
-        <!-- Input Area -->
-        <div class="input-area">
-            <div class="input-wrapper">
+        <!-- Input -->
+        <div class="input-zone">
+            <div class="input-shell" id="inputShell">
+                <div class="input-glow"></div>
                 <textarea
                     id="questionInput"
-                    placeholder="Ask a question about your documents..."
+                    placeholder="Ask anything about your documents…"
                     rows="1"
                     onkeydown="handleKeyDown(event)"
                     oninput="autoResize(this)"
                 ></textarea>
-                <button
-                    class="send-btn"
-                    id="sendBtn"
-                    onclick="sendQuestion()"
-                >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                        <path d="M22 2L11 13" stroke="white" stroke-width="2"
-                              stroke-linecap="round" stroke-linejoin="round"/>
-                        <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="white"
-                              stroke-width="2" stroke-linecap="round"
-                              stroke-linejoin="round"/>
+                <button class="send-btn" id="sendBtn" onclick="sendQuestion()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <path d="M22 2L11 13" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
                 </button>
             </div>
-            <div class="input-hint">Press Enter to send · Shift+Enter for new line</div>
+            <p class="input-footnote">↵ Enter to send &nbsp;·&nbsp; ⇧↵ New line</p>
         </div>
-
     </main>
-
 </div>
 
-<!-- ── UPLOAD MODAL ────────────────────────────── -->
+<!-- ══════════════ UPLOAD MODAL ══════════════ -->
 <div class="modal-overlay" id="uploadModal">
     <div class="modal">
-        <div class="modal-header">
-            <h3>Upload Document</h3>
-            <button class="modal-close" onclick="closeUploadModal()">×</button>
+        <div class="modal-top">
+            <div class="modal-icon-wrap">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <div>
+                <h3 class="modal-heading">Upload Document</h3>
+                <p class="modal-sub">PDF files only · Maximum 10MB</p>
+            </div>
+            <button class="modal-x" onclick="closeUploadModal()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+            </button>
         </div>
 
         <div class="modal-body">
-            <!-- Drop Zone -->
-            <div class="drop-zone" id="dropZone" onclick="triggerFileInput()">
-                <div class="drop-icon">📄</div>
-                <p class="drop-text">Click to choose a PDF file</p>
-                <p class="drop-hint">Supported format: PDF only · Max 10MB</p>
-                <input type="file" id="fileInput" accept=".pdf"
-                       style="display:none" onchange="handleFileSelect(event)"/>
+            <div class="dropzone" id="dropZone" onclick="triggerFileInput()">
+                <div class="dropzone-visual">
+                    <div class="dropzone-ring"></div>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <polyline points="14 2 14 8 20 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <line x1="12" y1="18" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        <polyline points="9 15 12 12 15 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <p class="dropzone-text">Drop PDF here or <span>choose file</span></p>
+                <input type="file" id="fileInput" accept=".pdf" style="display:none" onchange="handleFileSelect(event)"/>
             </div>
 
-            <!-- Selected File Info -->
-            <div class="file-info" id="fileInfo" style="display:none">
-                <span class="file-icon">📄</span>
-                <div class="file-details">
+            <div class="file-card" id="fileInfo" style="display:none">
+                <div class="file-card-pdf">PDF</div>
+                <div class="file-card-info">
                     <span class="file-name" id="fileName"></span>
                     <span class="file-size" id="fileSize"></span>
                 </div>
-                <button class="file-remove" onclick="removeFile()">×</button>
+                <button class="file-card-remove" onclick="removeFile()">×</button>
             </div>
 
-            <!-- Title Input -->
-            <div class="form-group" id="titleGroup" style="display:none">
-                <label>Document Title (optional)</label>
-                <input type="text" id="docTitle"
-                       placeholder="Leave blank to use filename"/>
+            <div class="field-group" id="titleGroup" style="display:none">
+                <label>Custom title <span class="label-opt">(optional)</span></label>
+                <input type="text" id="docTitle" placeholder="Leave blank to use filename" class="field-input"/>
             </div>
 
-            <!-- Progress -->
-            <div class="upload-progress" id="uploadProgress" style="display:none">
+            <div class="progress-track" id="uploadProgress" style="display:none">
                 <div class="progress-step" id="step1">
-                    <span class="step-icon">⏳</span>
-                    <span>Uploading file...</span>
+                    <div class="step-bullet"><span class="step-icon">○</span></div>
+                    <span class="step-label">Uploading file</span>
                 </div>
                 <div class="progress-step" id="step2">
-                    <span class="step-icon">⏳</span>
-                    <span>Extracting text...</span>
+                    <div class="step-bullet"><span class="step-icon">○</span></div>
+                    <span class="step-label">Extracting text</span>
                 </div>
                 <div class="progress-step" id="step3">
-                    <span class="step-icon">⏳</span>
-                    <span>Generating embeddings...</span>
+                    <div class="step-bullet"><span class="step-icon">○</span></div>
+                    <span class="step-label">Generating embeddings</span>
                 </div>
                 <div class="progress-step" id="step4">
-                    <span class="step-icon">⏳</span>
-                    <span>Building search index...</span>
+                    <div class="step-bullet"><span class="step-icon">○</span></div>
+                    <span class="step-label">Building search index</span>
                 </div>
             </div>
 
-            <!-- Error/Success in modal -->
             <div class="error-msg" id="uploadError"></div>
             <div class="success-msg" id="uploadSuccess"></div>
         </div>
 
-        <div class="modal-footer">
-            <button class="btn-secondary" onclick="closeUploadModal()">
-                Cancel
-            </button>
-            <button class="btn-primary" id="uploadBtn"
-                    onclick="uploadDocument()" style="width:auto; padding: 12px 28px;">
-                Upload
+        <div class="modal-actions">
+            <button class="btn-cancel" onclick="closeUploadModal()">Cancel</button>
+            <button class="btn-confirm" id="uploadBtn" onclick="uploadDocument()">
+                Upload & Process
             </button>
         </div>
     </div>
@@ -2399,8 +2537,64 @@ FILE: static\frontend\index.html
 <script src="/js/auth.js"></script>
 <script src="/js/app.js"></script>
 
+<!-- Animated background -->
+<script>
+(function() {
+    const canvas = document.getElementById('bgCanvas');
+    const ctx = canvas.getContext('2d');
+    let W, H, dots = [], animFrame;
+
+    function resize() {
+        W = canvas.width = window.innerWidth;
+        H = canvas.height = window.innerHeight;
+    }
+
+    function initDots() {
+        dots = [];
+        const cols = Math.ceil(W / 48);
+        const rows = Math.ceil(H / 48);
+        for (let i = 0; i < cols; i++) {
+            for (let j = 0; j < rows; j++) {
+                dots.push({
+                    x: i * 48 + 24,
+                    y: j * 48 + 24,
+                    alpha: Math.random() * 0.3,
+                    speed: 0.003 + Math.random() * 0.006,
+                    phase: Math.random() * Math.PI * 2
+                });
+            }
+        }
+    }
+
+    function draw(t) {
+        ctx.clearRect(0, 0, W, H);
+        dots.forEach(d => {
+            d.alpha = 0.04 + Math.sin(t * d.speed + d.phase) * 0.06;
+            ctx.beginPath();
+            ctx.arc(d.x, d.y, 1, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(99,102,241,${Math.max(0, d.alpha)})`;
+            ctx.fill();
+        });
+        animFrame = requestAnimationFrame(draw);
+    }
+
+    resize();
+    initDots();
+    window.addEventListener('resize', () => { resize(); initDots(); });
+    requestAnimationFrame(draw);
+})();
+
+function usePrompt(btn) {
+    const text = btn.querySelector('span').textContent;
+    const input = document.getElementById('questionInput');
+    input.value = text;
+    autoResize(input);
+    input.focus();
+}
+</script>
 </body>
 </html>
+
 ======================================================================
 FILE: static\frontend\login.html
 ======================================================================
@@ -2409,62 +2603,113 @@ FILE: static\frontend\login.html
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AskDocs AI — Login</title>
+    <title>AskDocs AI — Sign In</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/style.css">
 </head>
-<body>
+<body class="auth-body">
 
-<div class="auth-container">
-    <div class="auth-card">
+<div class="auth-scene">
+    <!-- Animated background orbs -->
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
 
-        <!-- Logo -->
-        <div class="auth-logo">
-            <h1>🧠 AskDocs AI</h1>
-            <p>AI-Powered Document Intelligence</p>
+    <div class="auth-split">
+        <!-- Left panel — branding -->
+        <div class="auth-brand">
+            <div class="brand-inner">
+                <div class="brand-mark">
+                    <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                        <rect width="48" height="48" rx="14" fill="url(#brandGrad)"/>
+                        <path d="M14 16h20M14 24h14M14 32h8" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+                        <circle cx="36" cy="32" r="6" fill="white" fill-opacity="0.2" stroke="white" stroke-width="1.5"/>
+                        <path d="M33.5 32h5M36 29.5v5" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+                        <defs>
+                            <linearGradient id="brandGrad" x1="0" y1="0" x2="48" y2="48">
+                                <stop stop-color="#6366f1"/>
+                                <stop offset="1" stop-color="#8b5cf6"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <h1 class="brand-name">AskDocs <span>AI</span></h1>
+                <p class="brand-tagline">Your documents, now conversational.</p>
+
+                <div class="brand-features">
+                    <div class="feature-pill">
+                        <span class="pill-dot"></span>
+                        Semantic Search
+                    </div>
+                    <div class="feature-pill">
+                        <span class="pill-dot pill-dot--green"></span>
+                        Source Citations
+                    </div>
+                    <div class="feature-pill">
+                        <span class="pill-dot pill-dot--amber"></span>
+                        PDF Intelligence
+                    </div>
+                </div>
+
+                <div class="brand-quote">
+                    <blockquote>"Ask anything. Know everything."</blockquote>
+                </div>
+            </div>
         </div>
 
-        <h2>Welcome Back</h2>
+        <!-- Right panel — form -->
+        <div class="auth-form-panel">
+            <div class="auth-card">
+                <div class="auth-card-header">
+                    <h2>Welcome back</h2>
+                    <p>Sign in to continue your session</p>
+                </div>
 
-        <!-- Error Message -->
-        <div class="error-msg" id="errorMsg"></div>
+                <div class="error-msg" id="errorMsg"></div>
 
-        <!-- Login Form -->
-        <div class="form-group">
-            <label for="username">Username</label>
-            <input
-                type="text"
-                id="username"
-                placeholder="Enter your username"
-                autocomplete="username"
-            />
+                <div class="field-group">
+                    <label for="username">Username</label>
+                    <div class="field-wrap">
+                        <svg class="field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.5"/>
+                            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        </svg>
+                        <input type="text" id="username" placeholder="Enter your username" autocomplete="username"/>
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <label for="password">Password</label>
+                    <div class="field-wrap">
+                        <svg class="field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" stroke-width="1.5"/>
+                            <path d="M7 11V7a5 5 0 0110 0v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        </svg>
+                        <input type="password" id="password" placeholder="••••••••" autocomplete="current-password"/>
+                    </div>
+                </div>
+
+                <button class="btn-auth" id="loginBtn" onclick="handleLogin()">
+                    <span class="btn-text">Sign In</span>
+                    <svg class="btn-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+
+                <div class="auth-divider"><span>New to AskDocs?</span></div>
+
+                <a href="/register" class="btn-secondary-auth">Create an account</a>
+            </div>
         </div>
-
-        <div class="form-group">
-            <label for="password">Password</label>
-            <input
-                type="password"
-                id="password"
-                placeholder="Enter your password"
-                autocomplete="current-password"
-            />
-        </div>
-
-        <button class="btn-primary" id="loginBtn" onclick="handleLogin()">
-            Login
-        </button>
-
-        <div class="auth-footer">
-            Don't have an account?
-            <a href="register.html">Register here</a>
-        </div>
-
     </div>
 </div>
 
 <script src="/js/auth.js"></script>
-
 </body>
 </html>
+
 ======================================================================
 FILE: static\frontend\register.html
 ======================================================================
@@ -2473,993 +2718,2022 @@ FILE: static\frontend\register.html
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AskDocs AI — Register</title>
+    <title>AskDocs AI — Create Account</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/style.css">
 </head>
-<body>
+<body class="auth-body">
 
-<div class="auth-container">
-    <div class="auth-card">
+<div class="auth-scene">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
 
-        <!-- Logo -->
-        <div class="auth-logo">
-            <h1>🧠 AskDocs AI</h1>
-            <p>AI-Powered Document Intelligence</p>
+    <div class="auth-split">
+        <!-- Left panel -->
+        <div class="auth-brand">
+            <div class="brand-inner">
+                <div class="brand-mark">
+                    <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                        <rect width="48" height="48" rx="14" fill="url(#brandGrad2)"/>
+                        <path d="M14 16h20M14 24h14M14 32h8" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+                        <circle cx="36" cy="32" r="6" fill="white" fill-opacity="0.2" stroke="white" stroke-width="1.5"/>
+                        <path d="M33.5 32h5M36 29.5v5" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+                        <defs>
+                            <linearGradient id="brandGrad2" x1="0" y1="0" x2="48" y2="48">
+                                <stop stop-color="#6366f1"/>
+                                <stop offset="1" stop-color="#8b5cf6"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <h1 class="brand-name">AskDocs <span>AI</span></h1>
+                <p class="brand-tagline">Join thousands querying smarter.</p>
+
+                <div class="brand-steps">
+                    <div class="step-item">
+                        <div class="step-num">01</div>
+                        <div class="step-text">Create your account</div>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-num">02</div>
+                        <div class="step-text">Upload your PDFs</div>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-num">03</div>
+                        <div class="step-text">Ask anything, instantly</div>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <h2>Create Account</h2>
+        <!-- Right panel — form -->
+        <div class="auth-form-panel">
+            <div class="auth-card">
+                <div class="auth-card-header">
+                    <h2>Create account</h2>
+                    <p>Start querying your documents with AI</p>
+                </div>
 
-        <!-- Messages -->
-        <div class="error-msg" id="errorMsg"></div>
-        <div class="success-msg" id="successMsg"></div>
+                <div class="error-msg" id="errorMsg"></div>
+                <div class="success-msg" id="successMsg"></div>
 
-        <!-- Register Form -->
-        <div class="form-group">
-            <label for="username">Username</label>
-            <input
-                type="text"
-                id="username"
-                placeholder="Choose a username"
-            />
+                <div class="field-group">
+                    <label for="username">Username</label>
+                    <div class="field-wrap">
+                        <svg class="field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.5"/>
+                            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        </svg>
+                        <input type="text" id="username" placeholder="Choose a username"/>
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <label for="email">Email address</label>
+                    <div class="field-wrap">
+                        <svg class="field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <rect x="2" y="4" width="20" height="16" rx="2" stroke="currentColor" stroke-width="1.5"/>
+                            <path d="M2 8l10 6 10-6" stroke="currentColor" stroke-width="1.5"/>
+                        </svg>
+                        <input type="email" id="email" placeholder="you@example.com"/>
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <label for="password">Password</label>
+                    <div class="field-wrap">
+                        <svg class="field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" stroke-width="1.5"/>
+                            <path d="M7 11V7a5 5 0 0110 0v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        </svg>
+                        <input type="password" id="password" placeholder="Min. 8 characters"/>
+                    </div>
+                </div>
+
+                <button class="btn-auth" id="registerBtn" onclick="handleRegister()">
+                    <span class="btn-text">Create Account</span>
+                    <svg class="btn-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+
+                <div class="auth-divider"><span>Already have an account?</span></div>
+
+                <a href="/login" class="btn-secondary-auth">Sign in instead</a>
+            </div>
         </div>
-
-        <div class="form-group">
-            <label for="email">Email</label>
-            <input
-                type="email"
-                id="email"
-                placeholder="Enter your email"
-            />
-        </div>
-
-        <div class="form-group">
-            <label for="password">Password</label>
-            <input
-                type="password"
-                id="password"
-                placeholder="Min 8 characters"
-            />
-        </div>
-
-        <button class="btn-primary" id="registerBtn" onclick="handleRegister()">
-            Create Account
-        </button>
-
-        <div class="auth-footer">
-            Already have an account?
-            <a href="login.html">Login here</a>
-        </div>
-
     </div>
 </div>
 
 <script src="/js/auth.js"></script>
-
 </body>
 </html>
+
 ======================================================================
 FILE: static\frontend\css\app.css
 ======================================================================
-/* ── App Layout ───────────────────────────────── */
-#app {
-    display: flex;
+/* ═══════════════════════════════════════════════════════
+   AskDocs AI — Main App Styles
+   Direction: Obsidian dark · Cyan-indigo electric · Cinematic depth
+═══════════════════════════════════════════════════════ */
+
+:root {
+    /* Core palette */
+    --void:       #05050a;
+    --obsidian:   #090910;
+    --deep:       #0d0d18;
+    --surface:    #111120;
+    --raised:     #161628;
+    --card:       #1b1b30;
+    --hover:      #1f1f35;
+
+    /* Borders */
+    --line:       rgba(255,255,255,0.055);
+    --line-focus: rgba(34,211,238,0.5);
+
+    /* Accents */
+    --cyan:       #22d3ee;
+    --cyan-dim:   rgba(34,211,238,0.12);
+    --cyan-glow:  rgba(34,211,238,0.25);
+    --indigo:     #6366f1;
+    --indigo-dim: rgba(99,102,241,0.12);
+    --violet:     #8b5cf6;
+
+    /* Text */
+    --t1: #f1f1fa;
+    --t2: #8888aa;
+    --t3: #45455a;
+
+    /* Status */
+    --green: #10b981;
+    --red:   #f87171;
+
+    /* Type */
+    --font: 'Outfit', sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+
+    /* Radius */
+    --r-sm: 6px;
+    --r-md: 10px;
+    --r-lg: 14px;
+    --r-xl: 20px;
+    --r-2xl: 28px;
+
+    /* Motion */
+    --ease: cubic-bezier(0.4, 0, 0.2, 1);
+    --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ── Reset ───────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { -webkit-font-smoothing: antialiased; }
+
+body {
+    font-family: var(--font);
+    background: var(--void);
+    color: var(--t1);
     height: 100vh;
     overflow: hidden;
 }
 
-/* ── Sidebar ──────────────────────────────────── */
+/* Animated dot grid behind everything */
+#bgCanvas {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+
+/* ═══════════════════════════════════════════════════
+   APP SHELL
+═══════════════════════════════════════════════════ */
+#app {
+    display: flex !important;
+    height: 100vh;
+    position: relative;
+    z-index: 1;
+}
+
+/* ═══════════════════════════════════════════════════
+   SIDEBAR — glassmorphism panel
+═══════════════════════════════════════════════════ */
 .sidebar {
-    width: 280px;
-    min-width: 280px;
-    background: #13131f;
-    border-right: 1px solid #2d2d3f;
+    width: 255px;
+    min-width: 255px;
+    height: 100vh;
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    position: relative;
+    z-index: 10;
+    border-right: 1px solid var(--line);
+    background: rgba(9, 9, 16, 0.85);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    transition: transform 0.3s var(--ease);
     overflow: hidden;
-    transition: transform 0.3s ease;
 }
 
+/* Subtle top-edge highlight */
+.sidebar::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(34,211,238,0.3), transparent);
+}
+
+.sidebar-glass {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 80% 40% at 50% -10%,
+        rgba(34,211,238,0.04) 0%,
+        transparent 70%);
+    pointer-events: none;
+}
+
+/* ── Logo ─────────────────────────────────────── */
 .sidebar-logo {
-    padding: 20px;
     display: flex;
     align-items: center;
     gap: 10px;
-    border-bottom: 1px solid #2d2d3f;
+    padding: 18px 16px 16px;
+    border-bottom: 1px solid var(--line);
+    flex-shrink: 0;
 }
 
-.logo-icon { font-size: 24px; }
-
-.logo-text {
-    font-size: 18px;
-    font-weight: 700;
-    color: #7c6af7;
-    letter-spacing: 0.5px;
-}
-
-/* Upload Button */
-.upload-btn {
-    margin: 16px;
-    padding: 11px 16px;
-    background: linear-gradient(135deg, #7c6af7, #5b4fcf);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
+.logo-gem {
+    width: 34px;
+    height: 34px;
     display: flex;
     align-items: center;
-    gap: 8px;
-    transition: opacity 0.2s;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(34,211,238,0.15), rgba(99,102,241,0.1));
+    border: 1px solid rgba(34,211,238,0.2);
+    border-radius: var(--r-md);
+    filter: drop-shadow(0 0 8px rgba(34,211,238,0.2));
+    flex-shrink: 0;
 }
 
-.upload-btn:hover { opacity: 0.9; }
-
-.upload-btn span {
-    font-size: 20px;
+.logo-wordmark {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
     line-height: 1;
 }
 
-/* Sidebar Sections */
-.sidebar-section {
+.logo-ask { color: var(--t1); }
+.logo-docs { color: var(--cyan); }
+
+.logo-badge {
+    margin-left: auto;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: var(--cyan);
+    background: rgba(34,211,238,0.08);
+    border: 1px solid rgba(34,211,238,0.2);
+    padding: 3px 6px;
+    border-radius: var(--r-sm);
+    flex-shrink: 0;
+}
+
+/* ── Upload button ────────────────────────────── */
+.sidebar-actions {
+    padding: 12px 12px 8px;
+    flex-shrink: 0;
+}
+
+.btn-upload {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px;
+    background: linear-gradient(135deg, rgba(34,211,238,0.1), rgba(99,102,241,0.08));
+    border: 1px solid rgba(34,211,238,0.2);
+    border-radius: var(--r-md);
+    color: var(--cyan);
+    font-size: 13px;
+    font-weight: 500;
+    font-family: var(--font);
+    cursor: pointer;
+    transition: all 0.2s var(--ease);
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-upload::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(34,211,238,0.08), transparent);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.btn-upload:hover {
+    border-color: rgba(34,211,238,0.45);
+    box-shadow: 0 0 16px rgba(34,211,238,0.15), inset 0 1px 0 rgba(255,255,255,0.05);
+    transform: translateY(-1px);
+}
+
+.btn-upload:hover::after { opacity: 1; }
+
+/* ── Sidebar blocks ───────────────────────────── */
+.sidebar-block {
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-block--flex {
     flex: 1;
-    overflow-y: auto;
-    padding: 8px 0;
     min-height: 0;
 }
 
-.sidebar-section-title {
-    padding: 8px 16px;
-    font-size: 11px;
-    font-weight: 600;
-    color: #666;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
-
-/* Document Items */
-.doc-item {
-    padding: 10px 16px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    transition: background 0.15s;
-    border-radius: 6px;
-    margin: 2px 8px;
-}
-
-.doc-item:hover { background: #1e1e2e; }
-
-.doc-item-icon { font-size: 16px; flex-shrink: 0; }
-
-.doc-item-name {
-    font-size: 13px;
-    color: #ccc;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.doc-item-size {
-    font-size: 11px;
-    color: #555;
-    margin-top: 2px;
-}
-
-/* History Items */
-.history-item {
-    padding: 8px 16px;
-    cursor: pointer;
-    border-radius: 6px;
-    margin: 2px 8px;
-    transition: background 0.15s;
-}
-
-.history-item:hover { background: #1e1e2e; }
-
-.history-item-text {
-    font-size: 12px;
-    color: #888;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.empty-state-small {
-    padding: 12px 16px;
-    font-size: 12px;
-    color: #444;
-    font-style: italic;
-}
-
-/* Sidebar Footer */
-.sidebar-footer {
-    padding: 16px;
-    border-top: 1px solid #2d2d3f;
+.sidebar-block-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    padding: 10px 16px 6px;
+    flex-shrink: 0;
 }
 
-.user-info {
+.sidebar-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--t3);
+}
+
+.sidebar-count {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--cyan);
+    background: var(--cyan-dim);
+    padding: 2px 6px;
+    border-radius: var(--r-sm);
+    font-family: var(--mono);
+}
+
+.doc-list, .history-list {
+    overflow-y: auto;
+    padding: 4px 8px;
+    flex: 1;
+}
+
+/* Empty state */
+.sidebar-empty {
     display: flex;
+    flex-direction: column;
     align-items: center;
     gap: 8px;
+    padding: 20px 16px;
+    color: var(--t3);
+    font-size: 12px;
+    text-align: center;
+}
+
+/* Doc items */
+.doc-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: var(--r-md);
+    cursor: pointer;
+    transition: background 0.15s;
+    margin-bottom: 2px;
+    position: relative;
     overflow: hidden;
 }
 
-.user-avatar {
-    width: 32px;
-    height: 32px;
-    background: linear-gradient(135deg, #7c6af7, #5b4fcf);
-    border-radius: 50%;
+.doc-item::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 20%; bottom: 20%;
+    width: 2px;
+    background: var(--cyan);
+    border-radius: 2px;
+    opacity: 0;
+    transform: scaleY(0);
+    transition: all 0.2s var(--spring);
+}
+
+.doc-item:hover { background: var(--hover); }
+
+.doc-item:hover::before {
+    opacity: 1;
+    transform: scaleY(1);
+}
+
+.doc-item-icon {
+    width: 30px;
+    height: 30px;
+    background: rgba(248, 113, 113, 0.08);
+    border: 1px solid rgba(248, 113, 113, 0.15);
+    border-radius: var(--r-sm);
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 13px;
+    flex-shrink: 0;
+}
+
+.doc-item-name {
+    font-size: 12.5px;
+    color: var(--t1);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 400;
+}
+
+.doc-item-size {
+    font-size: 10.5px;
+    color: var(--t3);
+    margin-top: 1px;
+    font-family: var(--mono);
+}
+
+/* History items */
+.history-item {
+    padding: 7px 10px;
+    border-radius: var(--r-md);
+    cursor: pointer;
+    transition: background 0.15s;
+    margin-bottom: 1px;
+}
+
+.history-item:hover { background: var(--hover); }
+
+.history-item-text {
+    font-size: 12px;
+    color: var(--t2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.history-item-text::before {
+    content: '›';
+    color: var(--t3);
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+/* Divider */
+.sidebar-divider {
+    height: 1px;
+    margin: 8px 12px;
+    background: var(--line);
+    flex-shrink: 0;
+}
+
+/* Footer */
+.sidebar-footer {
+    padding: 12px 14px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    background: rgba(0,0,0,0.2);
+}
+
+.user-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    overflow: hidden;
+}
+
+.user-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--cyan), var(--indigo));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
     font-weight: 700;
     color: white;
     flex-shrink: 0;
+    box-shadow: 0 0 10px rgba(34,211,238,0.25);
+}
+
+.user-meta {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .username {
     font-size: 13px;
-    color: #aaa;
+    font-weight: 500;
+    color: var(--t1);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.logout-btn {
-    padding: 6px 12px;
+.user-role {
+    font-size: 10px;
+    color: var(--t3);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+}
+
+.btn-logout {
+    width: 28px;
+    height: 28px;
     background: transparent;
-    border: 1px solid #3d3d50;
-    border-radius: 6px;
-    color: #888;
-    font-size: 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    color: var(--t3);
     cursor: pointer;
-    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
+    transition: all 0.2s;
 }
 
-.logout-btn:hover {
-    border-color: #ff6b7a;
-    color: #ff6b7a;
+.btn-logout:hover {
+    border-color: rgba(248,113,113,0.3);
+    color: var(--red);
+    background: rgba(248,113,113,0.06);
 }
 
-/* ── Main Content ─────────────────────────────── */
+/* ═══════════════════════════════════════════════════
+   MAIN CONTENT
+═══════════════════════════════════════════════════ */
 .main-content {
     flex: 1;
     display: flex;
     flex-direction: column;
     height: 100vh;
     overflow: hidden;
-    background: #0f0f1a;
+    position: relative;
+    background: var(--obsidian);
 }
 
-/* Top Bar */
+/* Subtle radial glow behind chat */
+.main-content::before {
+    content: '';
+    position: absolute;
+    top: -200px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 600px;
+    height: 400px;
+    background: radial-gradient(ellipse, rgba(99,102,241,0.06) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* ── Topbar ───────────────────────────────────── */
 .topbar {
-    padding: 16px 24px;
-    border-bottom: 1px solid #2d2d3f;
+    height: 52px;
+    padding: 0 18px;
+    border-bottom: 1px solid var(--line);
     display: flex;
     align-items: center;
-    gap: 16px;
-    background: #13131f;
+    gap: 14px;
     flex-shrink: 0;
+    background: rgba(9, 9, 16, 0.6);
+    backdrop-filter: blur(10px);
+    position: relative;
+    z-index: 2;
 }
 
 .menu-toggle {
     background: none;
     border: none;
-    color: #888;
-    font-size: 20px;
+    color: var(--t2);
     cursor: pointer;
-    padding: 4px;
+    padding: 6px;
+    border-radius: var(--r-sm);
     display: none;
+    transition: color 0.15s;
 }
 
-.topbar-title {
-    font-size: 16px;
-    font-weight: 600;
-    color: #ddd;
-    flex: 1;
+.menu-toggle:hover { color: var(--t1); }
+
+.topbar-pill {
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 14px;
+    background: var(--indigo-dim);
+    border: 1px solid rgba(99,102,241,0.18);
+    border-radius: 99px;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: rgba(129,140,248,0.9);
+    letter-spacing: 0.3px;
 }
 
-.topbar-right {
+.topbar-status {
     display: flex;
     align-items: center;
     gap: 6px;
+    font-size: 11.5px;
+    color: var(--green);
+    font-weight: 500;
+    letter-spacing: 0.3px;
 }
 
-.status-dot {
-    width: 8px;
-    height: 8px;
-    background: #28a745;
+.status-ring {
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
-    animation: pulse 2s infinite;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+    animation: pulse 2.5s ease-in-out infinite;
 }
 
 @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
+    0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--green); }
+    50% { opacity: 0.5; box-shadow: 0 0 2px var(--green); }
 }
 
-.status-text {
-    font-size: 12px;
-    color: #28a745;
-}
-
-/* ── Chat Area ────────────────────────────────── */
+/* ═══════════════════════════════════════════════════
+   CHAT AREA
+═══════════════════════════════════════════════════ */
 .chat-area {
     flex: 1;
     overflow-y: auto;
-    padding: 24px;
+    padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    position: relative;
+    z-index: 1;
+    scroll-behavior: smooth;
 }
 
-/* Welcome Screen */
+/* ── Welcome screen ───────────────────────────── */
 .welcome-screen {
-    text-align: center;
-    margin: auto;
-    padding: 40px 20px;
-    max-width: 500px;
-}
-
-.welcome-icon {
-    font-size: 64px;
-    margin-bottom: 20px;
-}
-
-.welcome-screen h2 {
-    font-size: 26px;
-    font-weight: 700;
-    color: #fff;
-    margin-bottom: 12px;
-}
-
-.welcome-screen p {
-    color: #888;
-    font-size: 15px;
-    line-height: 1.6;
-    margin-bottom: 28px;
-}
-
-.welcome-tips {
+    flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px 20px;
+    animation: welcomeIn 0.6s var(--ease) both;
 }
 
-.tip {
-    background: #1e1e2e;
-    border: 1px solid #2d2d3f;
-    border-radius: 8px;
-    padding: 12px 16px;
-    font-size: 14px;
-    color: #aaa;
-    text-align: left;
+@keyframes welcomeIn {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Input Area ───────────────────────────────── */
-.input-area {
-    padding: 16px 24px 20px;
-    border-top: 1px solid #2d2d3f;
-    background: #13131f;
-    flex-shrink: 0;
+/* Hero orb */
+.welcome-hero {
+    margin-bottom: 32px;
 }
 
-.input-wrapper {
-    display: flex;
-    align-items: flex-end;
-    gap: 10px;
-    background: #1e1e2e;
-    border: 1px solid #3d3d50;
-    border-radius: 12px;
-    padding: 10px 14px;
-    transition: border-color 0.2s;
-}
-
-.input-wrapper:focus-within {
-    border-color: #7c6af7;
-}
-
-.input-wrapper textarea {
-    flex: 1;
-    background: none;
-    border: none;
-    outline: none;
-    color: #fff;
-    font-size: 14px;
-    resize: none;
-    max-height: 120px;
-    line-height: 1.5;
-    font-family: inherit;
-}
-
-.input-wrapper textarea::placeholder { color: #555; }
-
-.send-btn {
-    width: 38px;
-    height: 38px;
-    background: linear-gradient(135deg, #7c6af7, #5b4fcf);
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
+.hero-orb {
+    position: relative;
+    width: 90px;
+    height: 90px;
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-shrink: 0;
+}
+
+.hero-orb-inner {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(34,211,238,0.3), rgba(99,102,241,0.3));
+    border: 1px solid rgba(34,211,238,0.3);
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow:
+        0 0 30px rgba(34,211,238,0.15),
+        0 0 60px rgba(99,102,241,0.1),
+        inset 0 1px 0 rgba(255,255,255,0.1);
+    animation: orbBreath 3s ease-in-out infinite;
+}
+
+@keyframes orbBreath {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 30px rgba(34,211,238,0.15), 0 0 60px rgba(99,102,241,0.1); }
+    50% { transform: scale(1.04); box-shadow: 0 0 40px rgba(34,211,238,0.25), 0 0 80px rgba(99,102,241,0.15); }
+}
+
+.hero-icon {
+    position: absolute;
+    z-index: 3;
+    filter: drop-shadow(0 0 8px rgba(255,255,255,0.3));
+}
+
+.hero-orb-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid rgba(34,211,238,0.12);
+    animation: ringExpand 3s ease-in-out infinite;
+}
+
+.ring-1 { width: 80px; height: 80px; animation-delay: 0s; }
+.ring-2 { width: 90px; height: 90px; animation-delay: 0.6s; opacity: 0.6; }
+.ring-3 { width: 100px; height: 100px; animation-delay: 1.2s; opacity: 0.3; }
+
+@keyframes ringExpand {
+    0%, 100% { transform: scale(1); opacity: 0.4; }
+    50% { transform: scale(1.06); opacity: 0.12; }
+}
+
+.welcome-heading {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--t1);
+    text-align: center;
+    margin-bottom: 12px;
+    letter-spacing: -0.5px;
+    line-height: 1.2;
+}
+
+.welcome-subtext {
+    font-size: 15px;
+    color: var(--t2);
+    text-align: center;
+    line-height: 1.7;
+    margin-bottom: 36px;
+    max-width: 400px;
+    font-weight: 300;
+}
+
+/* Prompt grid */
+.prompt-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    max-width: 540px;
+    width: 100%;
+}
+
+.prompt-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 16px;
+    background: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    cursor: pointer;
+    transition: all 0.2s var(--ease);
+    text-align: left;
+    font-family: var(--font);
+    position: relative;
+    overflow: hidden;
+}
+
+.prompt-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(34,211,238,0.04), transparent);
+    opacity: 0;
     transition: opacity 0.2s;
 }
 
-.send-btn:hover { opacity: 0.85; }
-.send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-.input-hint {
-    text-align: center;
-    font-size: 11px;
-    color: #444;
-    margin-top: 8px;
+.prompt-card:hover {
+    border-color: rgba(34,211,238,0.25);
+    background: var(--card);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3), 0 0 0 1px rgba(34,211,238,0.1);
 }
 
-/* ── Modal ────────────────────────────────────── */
-.modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.7);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    backdrop-filter: blur(4px);
-}
+.prompt-card:hover::after { opacity: 1; }
 
-.modal-overlay.show {
-    display: flex;
-}
+.prompt-icon { font-size: 18px; flex-shrink: 0; }
 
-.modal {
-    background: #1e1e2e;
-    border: 1px solid #2d2d3f;
-    border-radius: 16px;
-    width: 100%;
-    max-width: 480px;
-    margin: 20px;
-    box-shadow: 0 24px 80px rgba(0,0,0,0.6);
-}
-
-.modal-header {
-    padding: 20px 24px;
-    border-bottom: 1px solid #2d2d3f;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.modal-header h3 {
-    font-size: 17px;
-    font-weight: 600;
-    color: #fff;
-}
-
-.modal-close {
-    background: none;
-    border: none;
-    color: #888;
-    font-size: 24px;
-    cursor: pointer;
-    line-height: 1;
-    padding: 0;
+.prompt-card span {
+    font-size: 13px;
+    color: var(--t2);
+    line-height: 1.3;
     transition: color 0.2s;
 }
 
-.modal-close:hover { color: #fff; }
-
-.modal-body { padding: 24px; }
-
-.modal-footer {
-    padding: 16px 24px;
-    border-top: 1px solid #2d2d3f;
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-}
-
-.btn-secondary {
-    padding: 10px 20px;
-    background: transparent;
-    border: 1px solid #3d3d50;
-    border-radius: 8px;
-    color: #aaa;
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.btn-secondary:hover {
-    border-color: #888;
-    color: #fff;
-}
-
-/* Drop Zone */
-.drop-zone {
-    border: 2px dashed #3d3d50;
-    border-radius: 12px;
-    padding: 36px 24px;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.2s;
-    margin-bottom: 16px;
-    background: #13131f;
-}
-
-.drop-zone:hover {
-    border-color: #7c6af7;
-    background: rgba(124, 106, 247, 0.05);
-    transform: scale(1.01);
-}
-
-.drop-zone.dragover {
-    border-color: #7c6af7;
-    background: rgba(124, 106, 247, 0.1);
-}
-
-.drop-icon {
-    font-size: 40px;
-    margin-bottom: 12px;
-}
-
-.drop-text {
-    font-size: 15px;
-    color: #ccc;
-    margin-bottom: 6px;
-    font-weight: 500;
-}
-
-.drop-hint {
-    font-size: 12px;
-    color: #555;
-}
-
-
-
-/* File Info */
-.file-info {
-    background: #252535;
-    border: 1px solid #3d3d50;
-    border-radius: 8px;
-    padding: 12px 16px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 16px;
-}
-
-.file-icon { font-size: 24px; }
-
-.file-details { flex: 1; overflow: hidden; }
-
-.file-name {
-    display: block;
-    font-size: 13px;
-    color: #ddd;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.file-size {
-    font-size: 11px;
-    color: #666;
-}
-
-.file-remove {
-    background: none;
-    border: none;
-    color: #888;
-    font-size: 20px;
-    cursor: pointer;
-    padding: 0;
-    transition: color 0.2s;
-}
-
-.file-remove:hover { color: #ff6b7a; }
-
-/* Upload Progress */
-.upload-progress {
-    background: #252535;
-    border-radius: 8px;
-    padding: 16px;
-    margin-bottom: 16px;
-}
-
-.progress-step {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 6px 0;
-    font-size: 13px;
-    color: #888;
-}
-
-.progress-step.done {
-    color: #28a745;
-}
-
-.progress-step.active {
-    color: #7c6af7;
-}
-
-.step-icon { font-size: 16px; }
-
-/* ── Responsive ───────────────────────────────── */
-@media (max-width: 768px) {
-    .sidebar {
-        position: fixed;
-        left: 0;
-        top: 0;
-        z-index: 100;
-        transform: translateX(-100%);
-    }
-
-    .sidebar.open {
-        transform: translateX(0);
-    }
-
-    .menu-toggle { display: block; }
-}
+.prompt-card:hover span { color: var(--t1); }
 
 /* ── Messages ─────────────────────────────────── */
+.messages-container {
+    display: flex;
+    flex-direction: column;
+    max-width: 800px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 20px 24px;
+    gap: 0;
+}
+
 .message {
     display: flex;
-    gap: 12px;
-    animation: fadeInUp 0.3s ease;
+    gap: 14px;
+    padding: 18px 0;
+    animation: msgIn 0.35s var(--ease) both;
+    position: relative;
 }
 
-@keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+@keyframes msgIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
-/* User Message */
+/* User message — right aligned */
 .message.user {
     flex-direction: row-reverse;
 }
 
+/* AI message — left aligned */
+.message.ai {
+    flex-direction: row;
+}
+
+/* Separator line between messages */
+.message + .message {
+    border-top: 1px solid rgba(255,255,255,0.03);
+}
+
+/* Avatars */
 .message-avatar {
-    width: 36px;
-    height: 36px;
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
     flex-shrink: 0;
-    font-weight: 700;
+    margin-top: 3px;
+    position: relative;
 }
 
 .message.user .message-avatar {
-    background: linear-gradient(135deg, #7c6af7, #5b4fcf);
+    background: linear-gradient(135deg, var(--indigo), var(--violet));
+    font-size: 12px;
+    font-weight: 700;
     color: white;
-    font-size: 13px;
+    box-shadow: 0 0 14px rgba(99,102,241,0.3);
 }
 
 .message.ai .message-avatar {
-    background: linear-gradient(135deg, #1e3a5f, #0d2137);
-    border: 1px solid #2d4a6f;
-    font-size: 18px;
+    background: linear-gradient(135deg, rgba(34,211,238,0.15), rgba(99,102,241,0.1));
+    border: 1px solid rgba(34,211,238,0.2);
+    font-size: 15px;
+    box-shadow: 0 0 12px rgba(34,211,238,0.1);
 }
 
-/* Bubble */
+/* Bubble content */
 .message-bubble {
-    max-width: 70%;
     display: flex;
     flex-direction: column;
     gap: 8px;
+    max-width: 74%;
 }
 
-.message.user .message-bubble {
-    align-items: flex-end;
-}
+.message.user .message-bubble { align-items: flex-end; }
+.message.ai .message-bubble { align-items: flex-start; }
 
+/* Text bubble */
 .message-text {
-    padding: 12px 16px;
-    border-radius: 16px;
+    padding: 13px 17px;
+    border-radius: var(--r-xl);
     font-size: 14px;
-    line-height: 1.6;
+    line-height: 1.75;
     word-wrap: break-word;
+    white-space: pre-wrap;
+    position: relative;
 }
 
+/* User bubble */
 .message.user .message-text {
-    background: linear-gradient(135deg, #7c6af7, #5b4fcf);
-    color: white;
-    border-bottom-right-radius: 4px;
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    color: rgba(255,255,255,0.95);
+    border-bottom-right-radius: var(--r-sm);
+    box-shadow:
+        0 4px 20px rgba(99,102,241,0.3),
+        0 1px 0 rgba(255,255,255,0.08) inset;
 }
 
+/* AI bubble */
 .message.ai .message-text {
-    background: #1e1e2e;
-    border: 1px solid #2d2d3f;
-    color: #e0e0e0;
-    border-bottom-left-radius: 4px;
+    background: var(--raised);
+    border: 1px solid var(--line);
+    color: var(--t1);
+    border-bottom-left-radius: var(--r-sm);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
 }
 
-/* Sources */
+/* Error bubble */
+.message.error .message-text {
+    background: rgba(248,113,113,0.06);
+    border: 1px solid rgba(248,113,113,0.2);
+    color: var(--red);
+    border-radius: var(--r-lg);
+}
+
+/* Sources card */
 .message-sources {
-    background: #13131f;
-    border: 1px solid #2d2d3f;
-    border-radius: 10px;
-    padding: 10px 14px;
-    font-size: 12px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    padding: 12px 14px;
+    min-width: 220px;
+    max-width: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
+.message-sources::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--cyan), var(--indigo));
+    opacity: 0.6;
 }
 
 .sources-title {
-    color: #7c6af7;
-    font-weight: 600;
-    margin-bottom: 6px;
-    font-size: 11px;
+    font-size: 9.5px;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.source-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: #888;
-    padding: 3px 0;
-}
-
-.source-item span {
-    color: #aaa;
-}
-
-/* Timestamp */
-.message-time {
-    font-size: 11px;
-    color: #444;
-    padding: 0 4px;
-}
-
-/* ── Typing Indicator ─────────────────────────── */
-.typing-indicator {
-    display: flex;
-    gap: 12px;
-    align-items: flex-start;
-    animation: fadeInUp 0.3s ease;
-}
-
-.typing-bubble {
-    background: #1e1e2e;
-    border: 1px solid #2d2d3f;
-    border-radius: 16px;
-    border-bottom-left-radius: 4px;
-    padding: 14px 18px;
+    letter-spacing: 1.3px;
+    color: var(--cyan);
+    margin-bottom: 10px;
     display: flex;
     align-items: center;
     gap: 5px;
 }
 
+.source-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 0;
+    font-size: 12px;
+    color: var(--t3);
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    transition: color 0.15s;
+}
+
+.source-item:last-child { border-bottom: none; }
+
+.source-item span {
+    color: var(--t2);
+    font-weight: 500;
+}
+
+/* Timestamp */
+.message-time {
+    font-size: 10px;
+    color: var(--t3);
+    font-family: var(--mono);
+    padding: 0 4px;
+}
+
+/* ── Typing indicator ─────────────────────────── */
+.typing-indicator {
+    display: flex;
+    gap: 14px;
+    padding: 18px 24px;
+    max-width: 800px;
+    margin: 0 auto;
+    width: 100%;
+    animation: msgIn 0.3s ease both;
+}
+
+.typing-bubble {
+    background: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: var(--r-xl);
+    border-bottom-left-radius: var(--r-sm);
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+}
+
 .typing-dot {
-    width: 7px;
-    height: 7px;
-    background: #7c6af7;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
-    animation: typingBounce 1.2s infinite;
+    background: var(--cyan);
+    animation: typingBounce 1.2s ease-in-out infinite;
+    opacity: 0.5;
 }
 
 .typing-dot:nth-child(2) { animation-delay: 0.2s; }
 .typing-dot:nth-child(3) { animation-delay: 0.4s; }
 
 @keyframes typingBounce {
-    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-    30% { transform: translateY(-6px); opacity: 1; }
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.3; }
+    30% { transform: translateY(-7px); opacity: 1; }
 }
 
-/* ── Error Bubble ─────────────────────────────── */
-.message.error .message-text {
-    background: rgba(220, 53, 69, 0.1);
-    border: 1px solid rgba(220, 53, 69, 0.3);
-    color: #ff6b7a;
-}
-======================================================================
-FILE: static\frontend\css\style.css
-======================================================================
-/* ── Global Reset ─────────────────────────────── */
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
+/* ═══════════════════════════════════════════════════
+   INPUT ZONE
+═══════════════════════════════════════════════════ */
+.input-zone {
+    padding: 14px 20px 18px;
+    border-top: 1px solid var(--line);
+    background: rgba(9, 9, 16, 0.7);
+    backdrop-filter: blur(10px);
+    flex-shrink: 0;
+    position: relative;
+    z-index: 2;
 }
 
-body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: #0f0f1a;
-    color: #e0e0e0;
-    min-height: 100vh;
-}
-
-/* ── Auth Pages ───────────────────────────────── */
-.auth-container {
+.input-shell {
     display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-    background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 100%);
+    align-items: flex-end;
+    gap: 10px;
+    background: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: var(--r-xl);
+    padding: 12px 12px 12px 18px;
+    max-width: 760px;
+    margin: 0 auto;
+    position: relative;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    overflow: hidden;
 }
 
-.auth-card {
-    background: #1e1e2e;
-    border: 1px solid #2d2d3f;
-    border-radius: 16px;
-    padding: 40px;
-    width: 100%;
-    max-width: 420px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+/* Animated border glow on focus */
+.input-shell::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: var(--r-xl);
+    background: linear-gradient(135deg, var(--cyan), var(--indigo), var(--violet));
+    opacity: 0;
+    transition: opacity 0.3s;
+    z-index: -1;
 }
 
-.auth-logo {
-    text-align: center;
-    margin-bottom: 30px;
+.input-shell:focus-within {
+    border-color: rgba(34,211,238,0.35);
+    box-shadow:
+        0 0 0 3px rgba(34,211,238,0.08),
+        0 8px 30px rgba(0,0,0,0.3);
 }
 
-.auth-logo h1 {
-    font-size: 28px;
-    font-weight: 700;
-    color: #7c6af7;
-    letter-spacing: 1px;
+.input-glow {
+    position: absolute;
+    bottom: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60%;
+    height: 40px;
+    background: radial-gradient(ellipse, rgba(34,211,238,0.12), transparent);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
 }
 
-.auth-logo p {
-    color: #888;
-    font-size: 14px;
-    margin-top: 6px;
-}
+.input-shell:focus-within .input-glow { opacity: 1; }
 
-.auth-card h2 {
-    font-size: 22px;
-    font-weight: 600;
-    margin-bottom: 24px;
-    color: #fff;
-    text-align: center;
-}
-
-/* ── Form Elements ────────────────────────────── */
-.form-group {
-    margin-bottom: 18px;
-}
-
-.form-group label {
-    display: block;
-    font-size: 13px;
-    color: #aaa;
-    margin-bottom: 6px;
-    font-weight: 500;
-}
-
-.form-group input {
-    width: 100%;
-    padding: 12px 16px;
-    background: #252535;
-    border: 1px solid #3d3d50;
-    border-radius: 8px;
-    color: #fff;
-    font-size: 14px;
-    transition: border-color 0.2s;
-    outline: none;
-}
-
-.form-group input:focus {
-    border-color: #7c6af7;
-    background: #2a2a3d;
-}
-
-.form-group input::placeholder {
-    color: #555;
-}
-
-/* ── Buttons ──────────────────────────────────── */
-.btn-primary {
-    width: 100%;
-    padding: 13px;
-    background: linear-gradient(135deg, #7c6af7, #5b4fcf);
-    color: #fff;
+.input-shell textarea {
+    flex: 1;
+    background: none;
     border: none;
-    border-radius: 8px;
-    font-size: 15px;
-    font-weight: 600;
+    outline: none;
+    color: var(--t1);
+    font-size: 14.5px;
+    font-family: var(--font);
+    font-weight: 300;
+    resize: none;
+    max-height: 130px;
+    line-height: 1.6;
+    padding: 0;
+}
+
+.input-shell textarea::placeholder { color: var(--t3); }
+
+.send-btn {
+    width: 38px;
+    height: 38px;
+    background: linear-gradient(135deg, var(--cyan), var(--indigo));
+    border: none;
+    border-radius: var(--r-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
-    transition: opacity 0.2s, transform 0.1s;
-    margin-top: 8px;
+    flex-shrink: 0;
+    transition: all 0.2s var(--spring);
+    box-shadow: 0 3px 12px rgba(34,211,238,0.25);
 }
 
-.btn-primary:hover {
-    opacity: 0.9;
-    transform: translateY(-1px);
+.send-btn:hover {
+    transform: scale(1.08);
+    box-shadow: 0 4px 18px rgba(34,211,238,0.4);
 }
 
-.btn-primary:active {
-    transform: translateY(0);
-}
+.send-btn:active { transform: scale(0.96); }
 
-.btn-primary:disabled {
-    opacity: 0.6;
+.send-btn:disabled {
+    opacity: 0.35;
     cursor: not-allowed;
     transform: none;
+    box-shadow: none;
 }
 
-/* ── Messages ─────────────────────────────────── */
-.error-msg {
-    background: rgba(220, 53, 69, 0.15);
-    border: 1px solid rgba(220, 53, 69, 0.4);
-    color: #ff6b7a;
-    padding: 10px 14px;
-    border-radius: 8px;
+.input-footnote {
+    text-align: center;
+    font-size: 11px;
+    color: var(--t3);
+    margin-top: 8px;
+    max-width: 760px;
+    margin-left: auto;
+    margin-right: auto;
+    font-family: var(--mono);
+    letter-spacing: 0.3px;
+}
+
+/* ═══════════════════════════════════════════════════
+   MODAL
+═══════════════════════════════════════════════════ */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    backdrop-filter: blur(8px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+}
+
+.modal-overlay.show { display: flex; }
+
+.modal {
+    background: var(--surface);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: var(--r-2xl);
+    width: 100%;
+    max-width: 460px;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(34,211,238,0.05);
+    animation: modalIn 0.28s var(--spring) both;
+    position: relative;
+    overflow: hidden;
+}
+
+.modal::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--cyan), var(--indigo), var(--violet));
+}
+
+@keyframes modalIn {
+    from { opacity: 0; transform: scale(0.94) translateY(16px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal-top {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 20px 22px;
+    border-bottom: 1px solid var(--line);
+}
+
+.modal-icon-wrap {
+    width: 36px;
+    height: 36px;
+    background: var(--cyan-dim);
+    border: 1px solid rgba(34,211,238,0.2);
+    border-radius: var(--r-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--cyan);
+    flex-shrink: 0;
+}
+
+.modal-heading {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--t1);
+    line-height: 1.2;
+}
+
+.modal-sub {
+    font-size: 12px;
+    color: var(--t3);
+    margin-top: 2px;
+}
+
+.modal-x {
+    margin-left: auto;
+    width: 28px;
+    height: 28px;
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    color: var(--t3);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    flex-shrink: 0;
+}
+
+.modal-x:hover { color: var(--t1); background: var(--hover); border-color: rgba(255,255,255,0.12); }
+
+.modal-body { padding: 20px 22px; }
+
+/* Dropzone */
+.dropzone {
+    border: 1px dashed rgba(34,211,238,0.2);
+    border-radius: var(--r-xl);
+    padding: 28px 20px;
+    text-align: center;
+    cursor: pointer;
+    background: linear-gradient(135deg, rgba(34,211,238,0.03), rgba(99,102,241,0.02));
+    transition: all 0.2s;
+    margin-bottom: 14px;
+    position: relative;
+    overflow: hidden;
+}
+
+.dropzone:hover, .dropzone.dragover {
+    border-color: rgba(34,211,238,0.5);
+    background: rgba(34,211,238,0.05);
+    box-shadow: 0 0 20px rgba(34,211,238,0.08);
+}
+
+.dropzone-visual {
+    width: 52px;
+    height: 52px;
+    background: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--t3);
+    margin: 0 auto 12px;
+    position: relative;
+}
+
+.dropzone-ring {
+    position: absolute;
+    inset: -4px;
+    border-radius: calc(var(--r-md) + 4px);
+    border: 1px solid rgba(34,211,238,0.15);
+}
+
+.dropzone-text {
+    font-size: 13.5px;
+    color: var(--t2);
+    margin-bottom: 4px;
+}
+
+.dropzone-text span {
+    color: var(--cyan);
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+/* File card */
+.file-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 14px;
+    background: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    margin-bottom: 14px;
+}
+
+.file-card-pdf {
+    font-size: 9px;
+    font-weight: 700;
+    font-family: var(--mono);
+    letter-spacing: 1px;
+    color: var(--red);
+    background: rgba(248,113,113,0.08);
+    border: 1px solid rgba(248,113,113,0.2);
+    padding: 4px 6px;
+    border-radius: var(--r-sm);
+    flex-shrink: 0;
+}
+
+.file-card-info { flex: 1; overflow: hidden; }
+
+.file-name {
+    display: block;
     font-size: 13px;
-    margin-bottom: 16px;
+    color: var(--t1);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.file-size {
+    display: block;
+    font-size: 11px;
+    color: var(--t3);
+    margin-top: 2px;
+    font-family: var(--mono);
+}
+
+.file-card-remove {
+    background: none;
+    border: none;
+    color: var(--t3);
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    padding: 2px;
+    transition: color 0.15s;
+    flex-shrink: 0;
+}
+
+.file-card-remove:hover { color: var(--red); }
+
+/* Field */
+.field-group { margin-bottom: 14px; }
+
+.field-group label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--t3);
+    margin-bottom: 7px;
+}
+
+.label-opt { font-weight: 400; text-transform: none; letter-spacing: 0; }
+
+.field-input {
+    width: 100%;
+    padding: 10px 14px;
+    background: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    color: var(--t1);
+    font-size: 13.5px;
+    font-family: var(--font);
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.field-input:focus {
+    border-color: rgba(34,211,238,0.35);
+    box-shadow: 0 0 0 3px rgba(34,211,238,0.07);
+}
+
+.field-input::placeholder { color: var(--t3); }
+
+/* Progress track */
+.progress-track {
+    background: var(--deep);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    padding: 14px 16px;
+    margin-bottom: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.progress-step {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    color: var(--t3);
+    transition: color 0.2s;
+}
+
+.progress-step.active { color: var(--cyan); }
+.progress-step.done { color: var(--green); }
+
+.step-bullet {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 11px;
+    transition: all 0.2s;
+}
+
+.progress-step.active .step-bullet {
+    border-color: var(--cyan);
+    background: var(--cyan-dim);
+    color: var(--cyan);
+}
+
+.progress-step.done .step-bullet {
+    border-color: var(--green);
+    background: rgba(16,185,129,0.1);
+    color: var(--green);
+}
+
+.step-icon { font-size: 10px; }
+
+/* Messages */
+.error-msg {
+    padding: 10px 14px;
+    background: rgba(248,113,113,0.07);
+    border: 1px solid rgba(248,113,113,0.2);
+    border-radius: var(--r-md);
+    color: var(--red);
+    font-size: 13px;
+    margin-bottom: 12px;
     display: none;
 }
 
 .success-msg {
-    background: rgba(40, 167, 69, 0.15);
-    border: 1px solid rgba(40, 167, 69, 0.4);
-    color: #5cb85c;
     padding: 10px 14px;
-    border-radius: 8px;
+    background: rgba(16,185,129,0.07);
+    border: 1px solid rgba(16,185,129,0.2);
+    border-radius: var(--r-md);
+    color: var(--green);
     font-size: 13px;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
     display: none;
 }
 
-.error-msg.show,
-.success-msg.show {
-    display: block;
+.error-msg.show, .success-msg.show { display: block; }
+
+/* Modal actions */
+.modal-actions {
+    padding: 14px 22px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    background: rgba(0,0,0,0.15);
 }
 
-/* ── Auth Footer ──────────────────────────────── */
-.auth-footer {
-    text-align: center;
-    margin-top: 20px;
+.btn-cancel {
+    padding: 9px 18px;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    color: var(--t2);
     font-size: 13px;
-    color: #888;
+    font-family: var(--font);
+    cursor: pointer;
+    transition: all 0.15s;
 }
 
-.auth-footer a {
-    color: #7c6af7;
-    text-decoration: none;
+.btn-cancel:hover { border-color: rgba(255,255,255,0.15); color: var(--t1); }
+
+.btn-confirm {
+    padding: 9px 20px;
+    background: linear-gradient(135deg, var(--cyan), var(--indigo));
+    border: none;
+    border-radius: var(--r-md);
+    color: white;
+    font-size: 13px;
     font-weight: 500;
+    font-family: var(--font);
+    cursor: pointer;
+    transition: all 0.2s var(--spring);
+    box-shadow: 0 3px 12px rgba(34,211,238,0.2);
 }
 
-.auth-footer a:hover {
-    text-decoration: underline;
+.btn-confirm:hover {
+    opacity: 0.92;
+    transform: translateY(-1px);
+    box-shadow: 0 5px 18px rgba(34,211,238,0.3);
 }
 
-/* ── Loading Spinner ──────────────────────────── */
+.btn-confirm:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* ═══════════════════════════════════════════════════
+   RESPONSIVE
+═══════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+    .sidebar {
+        position: fixed;
+        left: 0; top: 0;
+        transform: translateX(-100%);
+        box-shadow: 0 0 60px rgba(0,0,0,0.8);
+    }
+
+    .sidebar.open { transform: translateX(0); }
+    .menu-toggle { display: flex; }
+    .topbar-pill { display: none; }
+
+    .messages-container { padding: 12px 14px; }
+    .message-bubble { max-width: 88%; }
+    .prompt-grid { grid-template-columns: 1fr; }
+    .input-zone { padding: 10px 12px 14px; }
+}
+
+======================================================================
+FILE: static\frontend\css\style.css
+======================================================================
+/* ═══════════════════════════════════════════════════
+   AskDocs AI — Global Styles
+   Fonts: Syne (display) + DM Sans (body)
+   Theme: Deep space dark with indigo accents
+═══════════════════════════════════════════════════ */
+
+/* ── Variables ──────────────────────────────────── */
+:root {
+    --bg-base:        #0a0a0f;
+    --bg-surface:     #111118;
+    --bg-elevated:    #16161f;
+    --bg-card:        #1a1a26;
+    --bg-hover:       #1e1e2d;
+    --border:         rgba(255,255,255,0.06);
+    --border-focus:   rgba(99,102,241,0.6);
+
+    --accent:         #6366f1;
+    --accent-light:   #818cf8;
+    --accent-dim:     rgba(99,102,241,0.15);
+    --accent-glow:    rgba(99,102,241,0.3);
+
+    --text-primary:   #f0f0f8;
+    --text-secondary: #9898b8;
+    --text-muted:     #5a5a7a;
+
+    --success:        #22c55e;
+    --error:          #f87171;
+    --warning:        #fb923c;
+
+    --radius-sm:      6px;
+    --radius-md:      10px;
+    --radius-lg:      16px;
+    --radius-xl:      24px;
+    --radius-full:    9999px;
+
+    --shadow-sm:  0 1px 3px rgba(0,0,0,0.4);
+    --shadow-md:  0 4px 16px rgba(0,0,0,0.5);
+    --shadow-lg:  0 12px 40px rgba(0,0,0,0.6);
+    --shadow-glow: 0 0 30px rgba(99,102,241,0.2);
+
+    --font-display: 'Syne', sans-serif;
+    --font-body:    'DM Sans', sans-serif;
+
+    --transition: 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Reset ──────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 15px; -webkit-font-smoothing: antialiased; }
+
+body {
+    font-family: var(--font-body);
+    background: var(--bg-base);
+    color: var(--text-primary);
+    line-height: 1.6;
+    min-height: 100vh;
+}
+
+/* ── Scrollbar ──────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+/* ══════════════════════════════════════════════════
+   AUTH PAGES
+══════════════════════════════════════════════════ */
+
+.auth-body {
+    background: var(--bg-base);
+    overflow: hidden;
+    height: 100vh;
+}
+
+/* Background orbs */
+.auth-scene {
+    position: relative;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.12;
+    animation: orbFloat 8s ease-in-out infinite;
+}
+
+.orb-1 {
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, #6366f1, transparent);
+    top: -200px; left: -100px;
+    animation-delay: 0s;
+}
+
+.orb-2 {
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, #8b5cf6, transparent);
+    bottom: -100px; right: 20%;
+    animation-delay: -3s;
+}
+
+.orb-3 {
+    width: 300px; height: 300px;
+    background: radial-gradient(circle, #06b6d4, transparent);
+    top: 50%; right: -50px;
+    animation-delay: -6s;
+}
+
+@keyframes orbFloat {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(20px, -30px) scale(1.05); }
+    66% { transform: translate(-15px, 20px) scale(0.95); }
+}
+
+/* Split layout */
+.auth-split {
+    display: flex;
+    height: 100vh;
+    position: relative;
+    z-index: 1;
+}
+
+/* ── Brand panel (left) ─────────────────────────── */
+.auth-brand {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 60px;
+    background: linear-gradient(135deg,
+        rgba(99,102,241,0.08) 0%,
+        rgba(139,92,246,0.04) 100%);
+    border-right: 1px solid var(--border);
+}
+
+@media (max-width: 768px) {
+    .auth-brand { display: none; }
+    .auth-form-panel { flex: 1; }
+}
+
+.brand-inner {
+    max-width: 380px;
+    animation: fadeUp 0.6s ease both;
+}
+
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.brand-mark {
+    margin-bottom: 24px;
+}
+
+.brand-name {
+    font-family: var(--font-display);
+    font-size: 42px;
+    font-weight: 800;
+    color: var(--text-primary);
+    line-height: 1;
+    margin-bottom: 12px;
+    letter-spacing: -0.5px;
+}
+
+.brand-name span {
+    background: linear-gradient(135deg, var(--accent), #a855f7);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.brand-tagline {
+    font-size: 16px;
+    color: var(--text-secondary);
+    margin-bottom: 36px;
+    font-weight: 300;
+}
+
+/* Feature pills */
+.brand-features {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 40px;
+}
+
+.feature-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    font-size: 13px;
+    color: var(--text-secondary);
+    width: fit-content;
+    transition: border-color var(--transition);
+}
+
+.feature-pill:hover { border-color: rgba(99,102,241,0.3); }
+
+.pill-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+}
+
+.pill-dot--green { background: var(--success); box-shadow: 0 0 6px var(--success); }
+.pill-dot--amber { background: var(--warning); box-shadow: 0 0 6px var(--warning); }
+
+.brand-quote blockquote {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-muted);
+    font-style: italic;
+    padding-left: 16px;
+    border-left: 2px solid var(--accent-dim);
+}
+
+/* Steps (register) */
+.brand-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin-bottom: 40px;
+}
+
+.step-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.step-num {
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--accent);
+    background: var(--accent-dim);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+}
+
+.step-text {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+/* ── Form panel (right) ─────────────────────────── */
+.auth-form-panel {
+    width: 460px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+}
+
+@media (max-width: 768px) {
+    .auth-form-panel { width: 100%; }
+}
+
+.auth-card {
+    width: 100%;
+    max-width: 380px;
+    animation: fadeUp 0.6s ease 0.1s both;
+}
+
+.auth-card-header {
+    margin-bottom: 32px;
+}
+
+.auth-card-header h2 {
+    font-family: var(--font-display);
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.auth-card-header p {
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
+/* ── Field Groups ───────────────────────────────── */
+.field-group {
+    margin-bottom: 16px;
+}
+
+.field-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+}
+
+.field-wrap {
+    position: relative;
+}
+
+.field-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    pointer-events: none;
+    transition: color var(--transition);
+}
+
+.field-wrap input {
+    width: 100%;
+    padding: 13px 14px 13px 42px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: var(--font-body);
+    outline: none;
+    transition: border-color var(--transition), box-shadow var(--transition), background var(--transition);
+}
+
+.field-wrap input:focus {
+    border-color: var(--border-focus);
+    background: var(--bg-card);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.field-wrap input:focus + .field-icon,
+.field-wrap:focus-within .field-icon {
+    color: var(--accent-light);
+}
+
+.field-wrap input::placeholder { color: var(--text-muted); }
+
+/* ── Auth Buttons ───────────────────────────────── */
+.btn-auth {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px;
+    background: linear-gradient(135deg, var(--accent), #8b5cf6);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    font-weight: 600;
+    font-family: var(--font-body);
+    cursor: pointer;
+    margin-top: 8px;
+    position: relative;
+    overflow: hidden;
+    transition: opacity var(--transition), transform var(--transition);
+    box-shadow: 0 4px 20px rgba(99,102,241,0.35);
+}
+
+.btn-auth::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent);
+    opacity: 0;
+    transition: opacity var(--transition);
+}
+
+.btn-auth:hover::before { opacity: 1; }
+.btn-auth:hover { transform: translateY(-1px); }
+.btn-auth:active { transform: translateY(0); }
+.btn-auth:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+.btn-arrow {
+    transition: transform var(--transition);
+}
+
+.btn-auth:hover .btn-arrow {
+    transform: translateX(3px);
+}
+
+.btn-secondary-auth {
+    display: block;
+    text-align: center;
+    padding: 12px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-family: var(--font-body);
+    text-decoration: none;
+    transition: all var(--transition);
+}
+
+.btn-secondary-auth:hover {
+    border-color: rgba(99,102,241,0.4);
+    color: var(--text-primary);
+    background: var(--accent-dim);
+}
+
+/* ── Divider ────────────────────────────────────── */
+.auth-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 20px 0;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+
+/* ── Messages ───────────────────────────────────── */
+.error-msg {
+    padding: 10px 14px;
+    background: rgba(248, 113, 113, 0.08);
+    border: 1px solid rgba(248, 113, 113, 0.25);
+    border-radius: var(--radius-md);
+    color: var(--error);
+    font-size: 13px;
+    margin-bottom: 16px;
+    display: none;
+    animation: fadeUp 0.2s ease;
+}
+
+.success-msg {
+    padding: 10px 14px;
+    background: rgba(34, 197, 94, 0.08);
+    border: 1px solid rgba(34, 197, 94, 0.25);
+    border-radius: var(--radius-md);
+    color: var(--success);
+    font-size: 13px;
+    margin-bottom: 16px;
+    display: none;
+    animation: fadeUp 0.2s ease;
+}
+
+.error-msg.show, .success-msg.show { display: block; }
+
+/* ── Spinner ────────────────────────────────────── */
 .spinner {
     display: inline-block;
-    width: 16px;
-    height: 16px;
+    width: 14px; height: 14px;
     border: 2px solid rgba(255,255,255,0.3);
-    border-top-color: #fff;
+    border-top-color: white;
     border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-    margin-right: 8px;
+    animation: spin 0.6s linear infinite;
     vertical-align: middle;
+    margin-right: 6px;
 }
 
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
+@keyframes spin { to { transform: rotate(360deg); } }
+
 ======================================================================
 FILE: static\frontend\js\app.js
 ======================================================================

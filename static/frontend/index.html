@@ -4,189 +4,286 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AskDocs AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
 
-<!-- Auth Guard: redirect to login if not logged in -->
+<!-- Background canvas -->
+<canvas id="bgCanvas"></canvas>
+
 <div id="app" style="display:none; width:100%; height:100vh;">
 
-    <!-- ── SIDEBAR ─────────────────────────────── -->
+    <!-- ══════════════ SIDEBAR ══════════════ -->
     <aside class="sidebar" id="sidebar">
+
+        <!-- Glass noise overlay -->
+        <div class="sidebar-glass"></div>
 
         <!-- Logo -->
         <div class="sidebar-logo">
-            <span class="logo-icon">🧠</span>
-            <span class="logo-text">AskDocs AI</span>
+            <div class="logo-gem">
+                <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
+                    <path d="M16 2L28 9V23L16 30L4 23V9L16 2Z" fill="url(#gemGrad)" stroke="rgba(255,255,255,0.2)" stroke-width="0.5"/>
+                    <path d="M16 2L28 9L16 16L4 9L16 2Z" fill="url(#gemTop)"/>
+                    <path d="M16 16V30L4 23V9L16 16Z" fill="url(#gemLeft)"/>
+                    <path d="M16 16V30L28 23V9L16 16Z" fill="url(#gemRight)"/>
+                    <defs>
+                        <linearGradient id="gemGrad" x1="4" y1="2" x2="28" y2="30">
+                            <stop stop-color="#22d3ee"/>
+                            <stop offset="1" stop-color="#818cf8"/>
+                        </linearGradient>
+                        <linearGradient id="gemTop" x1="4" y1="2" x2="28" y2="16" gradientUnits="userSpaceOnUse">
+                            <stop stop-color="rgba(255,255,255,0.6)"/>
+                            <stop offset="1" stop-color="rgba(34,211,238,0.3)"/>
+                        </linearGradient>
+                        <linearGradient id="gemLeft" x1="4" y1="9" x2="16" y2="30" gradientUnits="userSpaceOnUse">
+                            <stop stop-color="rgba(34,211,238,0.15)"/>
+                            <stop offset="1" stop-color="rgba(34,211,238,0.05)"/>
+                        </linearGradient>
+                        <linearGradient id="gemRight" x1="28" y1="9" x2="16" y2="30" gradientUnits="userSpaceOnUse">
+                            <stop stop-color="rgba(129,140,248,0.3)"/>
+                            <stop offset="1" stop-color="rgba(129,140,248,0.1)"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+            </div>
+            <div class="logo-wordmark">
+                <span class="logo-ask">Ask</span><span class="logo-docs">Docs</span>
+            </div>
+            <div class="logo-badge">AI</div>
         </div>
 
-        <!-- Upload Button -->
-        <button class="upload-btn" onclick="openUploadModal()">
-            <span>+</span> Upload Document
-        </button>
-
-        <!-- Documents List -->
-        <div class="sidebar-section">
-            <div class="sidebar-section-title">📄 Documents</div>
-            <div class="doc-list" id="docList">
-                <div class="empty-state-small">No documents yet</div>
-            </div>
-        </div>
-
-        <!-- Chat History -->
-        <div class="sidebar-section">
-            <div class="sidebar-section-title">🕐 Recent Questions</div>
-            <div class="history-list" id="historyList">
-                <div class="empty-state-small">No history yet</div>
-            </div>
-        </div>
-
-        <!-- Sidebar Footer -->
-        <div class="sidebar-footer">
-            <div class="user-info">
-                <div class="user-avatar" id="userAvatar">K</div>
-                <span class="username" id="usernameDisplay">User</span>
-            </div>
-            <button class="logout-btn" onclick="handleLogout()">
-                Logout
+        <!-- New chat / Upload -->
+        <div class="sidebar-actions">
+            <button class="btn-upload" onclick="openUploadModal()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Upload PDF
             </button>
         </div>
 
-    </aside>
-
-    <!-- ── MAIN CONTENT ────────────────────────── -->
-    <main class="main-content">
-
-        <!-- Top Bar -->
-        <div class="topbar">
-            <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
-            <h2 class="topbar-title">Chat with your Documents</h2>
-            <div class="topbar-right">
-                <span class="status-dot"></span>
-                <span class="status-text">AI Ready</span>
+        <!-- Documents -->
+        <div class="sidebar-block">
+            <div class="sidebar-block-header">
+                <span class="sidebar-label">Library</span>
+                <span class="sidebar-count" id="docCount">0</span>
+            </div>
+            <div class="doc-list" id="docList">
+                <div class="sidebar-empty">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" opacity="0.3">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="currentColor" stroke-width="1.5"/>
+                        <polyline points="14 2 14 8 20 8" stroke="currentColor" stroke-width="1.5"/>
+                    </svg>
+                    <p>No documents yet</p>
+                </div>
             </div>
         </div>
 
-        <!-- Chat Area -->
+        <!-- Divider -->
+        <div class="sidebar-divider"></div>
+
+        <!-- History -->
+        <div class="sidebar-block sidebar-block--flex">
+            <div class="sidebar-block-header">
+                <span class="sidebar-label">History</span>
+            </div>
+            <div class="history-list" id="historyList">
+                <div class="sidebar-empty">
+                    <p>Ask your first question</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="sidebar-footer">
+            <div class="user-row">
+                <div class="user-avatar" id="userAvatar">A</div>
+                <div class="user-meta">
+                    <span class="username" id="usernameDisplay">User</span>
+                    <span class="user-role">Member</span>
+                </div>
+            </div>
+            <button class="btn-logout" onclick="handleLogout()" title="Sign out">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                    <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    <polyline points="16 17 21 12 16 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <line x1="21" y1="12" x2="9" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+            </button>
+        </div>
+    </aside>
+
+    <!-- ══════════════ MAIN ══════════════ -->
+    <main class="main-content">
+
+        <!-- Top bar -->
+        <header class="topbar">
+            <button class="menu-toggle" onclick="toggleSidebar()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path d="M3 12h18M3 6h18M3 18h18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+            </button>
+
+            <div class="topbar-pill">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="3" fill="currentColor"/>
+                    <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                Semantic AI Engine
+            </div>
+
+            <div class="topbar-status">
+                <span class="status-ring"></span>
+                Online
+            </div>
+        </header>
+
+        <!-- Chat zone -->
         <div class="chat-area" id="chatArea">
 
-            <!-- Welcome Message -->
+            <!-- Welcome -->
             <div class="welcome-screen" id="welcomeScreen">
-                <div class="welcome-icon">🧠</div>
-                <h2>Welcome to AskDocs AI</h2>
-                <p>Upload a PDF document and start asking questions.<br>
-                The AI will find relevant answers with source references.</p>
-                <div class="welcome-tips">
-                    <div class="tip">📤 Upload a PDF from the sidebar</div>
-                    <div class="tip">💬 Ask any question about your document</div>
-                    <div class="tip">📌 Get answers with page references</div>
+                <div class="welcome-hero">
+                    <div class="hero-orb">
+                        <div class="hero-orb-inner"></div>
+                        <div class="hero-orb-ring ring-1"></div>
+                        <div class="hero-orb-ring ring-2"></div>
+                        <div class="hero-orb-ring ring-3"></div>
+                        <svg class="hero-icon" width="32" height="32" viewBox="0 0 32 32" fill="none">
+                            <path d="M16 2L28 9V23L16 30L4 23V9L16 2Z" fill="white" fill-opacity="0.9"/>
+                        </svg>
+                    </div>
+                </div>
+                <h1 class="welcome-heading">What do you want to know?</h1>
+                <p class="welcome-subtext">Upload your PDFs and ask anything. I'll find the answer<br>with precise source citations from your documents.</p>
+                <div class="prompt-grid">
+                    <button class="prompt-card" onclick="usePrompt(this)">
+                        <div class="prompt-icon">📋</div>
+                        <span>Summarize this document</span>
+                    </button>
+                    <button class="prompt-card" onclick="usePrompt(this)">
+                        <div class="prompt-icon">🔍</div>
+                        <span>What are the key findings?</span>
+                    </button>
+                    <button class="prompt-card" onclick="usePrompt(this)">
+                        <div class="prompt-icon">⚙️</div>
+                        <span>What technologies are used?</span>
+                    </button>
+                    <button class="prompt-card" onclick="usePrompt(this)">
+                        <div class="prompt-icon">🎯</div>
+                        <span>What are the main objectives?</span>
+                    </button>
                 </div>
             </div>
 
-            <!-- Messages will appear here -->
+            <!-- Messages -->
             <div class="messages-container" id="messagesContainer"></div>
-
         </div>
 
-        <!-- Input Area -->
-        <div class="input-area">
-            <div class="input-wrapper">
+        <!-- Input -->
+        <div class="input-zone">
+            <div class="input-shell" id="inputShell">
+                <div class="input-glow"></div>
                 <textarea
                     id="questionInput"
-                    placeholder="Ask a question about your documents..."
+                    placeholder="Ask anything about your documents…"
                     rows="1"
                     onkeydown="handleKeyDown(event)"
                     oninput="autoResize(this)"
                 ></textarea>
-                <button
-                    class="send-btn"
-                    id="sendBtn"
-                    onclick="sendQuestion()"
-                >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                        <path d="M22 2L11 13" stroke="white" stroke-width="2"
-                              stroke-linecap="round" stroke-linejoin="round"/>
-                        <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="white"
-                              stroke-width="2" stroke-linecap="round"
-                              stroke-linejoin="round"/>
+                <button class="send-btn" id="sendBtn" onclick="sendQuestion()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <path d="M22 2L11 13" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
                 </button>
             </div>
-            <div class="input-hint">Press Enter to send · Shift+Enter for new line</div>
+            <p class="input-footnote">↵ Enter to send &nbsp;·&nbsp; ⇧↵ New line</p>
         </div>
-
     </main>
-
 </div>
 
-<!-- ── UPLOAD MODAL ────────────────────────────── -->
+<!-- ══════════════ UPLOAD MODAL ══════════════ -->
 <div class="modal-overlay" id="uploadModal">
     <div class="modal">
-        <div class="modal-header">
-            <h3>Upload Document</h3>
-            <button class="modal-close" onclick="closeUploadModal()">×</button>
+        <div class="modal-top">
+            <div class="modal-icon-wrap">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <div>
+                <h3 class="modal-heading">Upload Document</h3>
+                <p class="modal-sub">PDF files only · Maximum 10MB</p>
+            </div>
+            <button class="modal-x" onclick="closeUploadModal()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+            </button>
         </div>
 
         <div class="modal-body">
-            <!-- Drop Zone -->
-            <div class="drop-zone" id="dropZone" onclick="triggerFileInput()">
-                <div class="drop-icon">📄</div>
-                <p class="drop-text">Click to choose a PDF file</p>
-                <p class="drop-hint">Supported format: PDF only · Max 10MB</p>
-                <input type="file" id="fileInput" accept=".pdf"
-                       style="display:none" onchange="handleFileSelect(event)"/>
+            <div class="dropzone" id="dropZone" onclick="triggerFileInput()">
+                <div class="dropzone-visual">
+                    <div class="dropzone-ring"></div>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <polyline points="14 2 14 8 20 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <line x1="12" y1="18" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        <polyline points="9 15 12 12 15 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <p class="dropzone-text">Drop PDF here or <span>choose file</span></p>
+                <input type="file" id="fileInput" accept=".pdf" style="display:none" onchange="handleFileSelect(event)"/>
             </div>
 
-            <!-- Selected File Info -->
-            <div class="file-info" id="fileInfo" style="display:none">
-                <span class="file-icon">📄</span>
-                <div class="file-details">
+            <div class="file-card" id="fileInfo" style="display:none">
+                <div class="file-card-pdf">PDF</div>
+                <div class="file-card-info">
                     <span class="file-name" id="fileName"></span>
                     <span class="file-size" id="fileSize"></span>
                 </div>
-                <button class="file-remove" onclick="removeFile()">×</button>
+                <button class="file-card-remove" onclick="removeFile()">×</button>
             </div>
 
-            <!-- Title Input -->
-            <div class="form-group" id="titleGroup" style="display:none">
-                <label>Document Title (optional)</label>
-                <input type="text" id="docTitle"
-                       placeholder="Leave blank to use filename"/>
+            <div class="field-group" id="titleGroup" style="display:none">
+                <label>Custom title <span class="label-opt">(optional)</span></label>
+                <input type="text" id="docTitle" placeholder="Leave blank to use filename" class="field-input"/>
             </div>
 
-            <!-- Progress -->
-            <div class="upload-progress" id="uploadProgress" style="display:none">
+            <div class="progress-track" id="uploadProgress" style="display:none">
                 <div class="progress-step" id="step1">
-                    <span class="step-icon">⏳</span>
-                    <span>Uploading file...</span>
+                    <div class="step-bullet"><span class="step-icon">○</span></div>
+                    <span class="step-label">Uploading file</span>
                 </div>
                 <div class="progress-step" id="step2">
-                    <span class="step-icon">⏳</span>
-                    <span>Extracting text...</span>
+                    <div class="step-bullet"><span class="step-icon">○</span></div>
+                    <span class="step-label">Extracting text</span>
                 </div>
                 <div class="progress-step" id="step3">
-                    <span class="step-icon">⏳</span>
-                    <span>Generating embeddings...</span>
+                    <div class="step-bullet"><span class="step-icon">○</span></div>
+                    <span class="step-label">Generating embeddings</span>
                 </div>
                 <div class="progress-step" id="step4">
-                    <span class="step-icon">⏳</span>
-                    <span>Building search index...</span>
+                    <div class="step-bullet"><span class="step-icon">○</span></div>
+                    <span class="step-label">Building search index</span>
                 </div>
             </div>
 
-            <!-- Error/Success in modal -->
             <div class="error-msg" id="uploadError"></div>
             <div class="success-msg" id="uploadSuccess"></div>
         </div>
 
-        <div class="modal-footer">
-            <button class="btn-secondary" onclick="closeUploadModal()">
-                Cancel
-            </button>
-            <button class="btn-primary" id="uploadBtn"
-                    onclick="uploadDocument()" style="width:auto; padding: 12px 28px;">
-                Upload
+        <div class="modal-actions">
+            <button class="btn-cancel" onclick="closeUploadModal()">Cancel</button>
+            <button class="btn-confirm" id="uploadBtn" onclick="uploadDocument()">
+                Upload & Process
             </button>
         </div>
     </div>
@@ -195,5 +292,60 @@
 <script src="/js/auth.js"></script>
 <script src="/js/app.js"></script>
 
+<!-- Animated background -->
+<script>
+(function() {
+    const canvas = document.getElementById('bgCanvas');
+    const ctx = canvas.getContext('2d');
+    let W, H, dots = [], animFrame;
+
+    function resize() {
+        W = canvas.width = window.innerWidth;
+        H = canvas.height = window.innerHeight;
+    }
+
+    function initDots() {
+        dots = [];
+        const cols = Math.ceil(W / 48);
+        const rows = Math.ceil(H / 48);
+        for (let i = 0; i < cols; i++) {
+            for (let j = 0; j < rows; j++) {
+                dots.push({
+                    x: i * 48 + 24,
+                    y: j * 48 + 24,
+                    alpha: Math.random() * 0.3,
+                    speed: 0.003 + Math.random() * 0.006,
+                    phase: Math.random() * Math.PI * 2
+                });
+            }
+        }
+    }
+
+    function draw(t) {
+        ctx.clearRect(0, 0, W, H);
+        dots.forEach(d => {
+            d.alpha = 0.04 + Math.sin(t * d.speed + d.phase) * 0.06;
+            ctx.beginPath();
+            ctx.arc(d.x, d.y, 1, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(99,102,241,${Math.max(0, d.alpha)})`;
+            ctx.fill();
+        });
+        animFrame = requestAnimationFrame(draw);
+    }
+
+    resize();
+    initDots();
+    window.addEventListener('resize', () => { resize(); initDots(); });
+    requestAnimationFrame(draw);
+})();
+
+function usePrompt(btn) {
+    const text = btn.querySelector('span').textContent;
+    const input = document.getElementById('questionInput');
+    input.value = text;
+    autoResize(input);
+    input.focus();
+}
+</script>
 </body>
 </html>

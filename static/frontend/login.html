@@ -3,59 +3,109 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AskDocs AI — Login</title>
+    <title>AskDocs AI — Sign In</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/style.css">
 </head>
-<body>
+<body class="auth-body">
 
-<div class="auth-container">
-    <div class="auth-card">
+<div class="auth-scene">
+    <!-- Animated background orbs -->
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
 
-        <!-- Logo -->
-        <div class="auth-logo">
-            <h1>🧠 AskDocs AI</h1>
-            <p>AI-Powered Document Intelligence</p>
+    <div class="auth-split">
+        <!-- Left panel — branding -->
+        <div class="auth-brand">
+            <div class="brand-inner">
+                <div class="brand-mark">
+                    <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                        <rect width="48" height="48" rx="14" fill="url(#brandGrad)"/>
+                        <path d="M14 16h20M14 24h14M14 32h8" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+                        <circle cx="36" cy="32" r="6" fill="white" fill-opacity="0.2" stroke="white" stroke-width="1.5"/>
+                        <path d="M33.5 32h5M36 29.5v5" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+                        <defs>
+                            <linearGradient id="brandGrad" x1="0" y1="0" x2="48" y2="48">
+                                <stop stop-color="#6366f1"/>
+                                <stop offset="1" stop-color="#8b5cf6"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <h1 class="brand-name">AskDocs <span>AI</span></h1>
+                <p class="brand-tagline">Your documents, now conversational.</p>
+
+                <div class="brand-features">
+                    <div class="feature-pill">
+                        <span class="pill-dot"></span>
+                        Semantic Search
+                    </div>
+                    <div class="feature-pill">
+                        <span class="pill-dot pill-dot--green"></span>
+                        Source Citations
+                    </div>
+                    <div class="feature-pill">
+                        <span class="pill-dot pill-dot--amber"></span>
+                        PDF Intelligence
+                    </div>
+                </div>
+
+                <div class="brand-quote">
+                    <blockquote>"Ask anything. Know everything."</blockquote>
+                </div>
+            </div>
         </div>
 
-        <h2>Welcome Back</h2>
+        <!-- Right panel — form -->
+        <div class="auth-form-panel">
+            <div class="auth-card">
+                <div class="auth-card-header">
+                    <h2>Welcome back</h2>
+                    <p>Sign in to continue your session</p>
+                </div>
 
-        <!-- Error Message -->
-        <div class="error-msg" id="errorMsg"></div>
+                <div class="error-msg" id="errorMsg"></div>
 
-        <!-- Login Form -->
-        <div class="form-group">
-            <label for="username">Username</label>
-            <input
-                type="text"
-                id="username"
-                placeholder="Enter your username"
-                autocomplete="username"
-            />
+                <div class="field-group">
+                    <label for="username">Username</label>
+                    <div class="field-wrap">
+                        <svg class="field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.5"/>
+                            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        </svg>
+                        <input type="text" id="username" placeholder="Enter your username" autocomplete="username"/>
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <label for="password">Password</label>
+                    <div class="field-wrap">
+                        <svg class="field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" stroke-width="1.5"/>
+                            <path d="M7 11V7a5 5 0 0110 0v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        </svg>
+                        <input type="password" id="password" placeholder="••••••••" autocomplete="current-password"/>
+                    </div>
+                </div>
+
+                <button class="btn-auth" id="loginBtn" onclick="handleLogin()">
+                    <span class="btn-text">Sign In</span>
+                    <svg class="btn-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+
+                <div class="auth-divider"><span>New to AskDocs?</span></div>
+
+                <a href="/register" class="btn-secondary-auth">Create an account</a>
+            </div>
         </div>
-
-        <div class="form-group">
-            <label for="password">Password</label>
-            <input
-                type="password"
-                id="password"
-                placeholder="Enter your password"
-                autocomplete="current-password"
-            />
-        </div>
-
-        <button class="btn-primary" id="loginBtn" onclick="handleLogin()">
-            Login
-        </button>
-
-        <div class="auth-footer">
-            Don't have an account?
-            <a href="/register">Register here</a>
-        </div>
-
     </div>
 </div>
 
 <script src="/js/auth.js"></script>
-
 </body>
 </html>

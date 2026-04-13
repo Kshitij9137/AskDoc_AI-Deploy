@@ -9,7 +9,7 @@ NOISE_PHRASES = [
     'project guide', 'university of allahabad',
     'institute of professional', 'centre of computer',
     'prayagraj', 'uttar pradesh', 'master of computer',
-    '4th semester', '2024-2026', 'u2449028',
+    '4th semester', '2024-2026',
 ]
 
 STOP_WORDS = {
@@ -167,28 +167,43 @@ def extract_answer(question, context):
     scored.sort(key=lambda x: x[0], reverse=True)
 
     if not scored:
-        # Fallback — find best clean sentence from context
-        best_fallback = None
-        best_length = 0
+        # For summary questions return multiple clean sentences
+        clean_sentences = []
         for sentence in sentences:
             sentence = sentence.strip()
-            # Skip noise
-            if is_noise_sentence(sentence):
-                continue
-            # Skip bullet point heavy sentences
-            if sentence.count('◦') + sentence.count('•') > 2:
-                continue
-            # Skip API path sentences
-            if '/api/' in sentence:
-                continue
-            word_count = len(sentence.split())
-            if word_count >= 15 and word_count > best_length:
-                best_length = word_count
-                best_fallback = sentence
+            if (len(sentence.split()) >= 10
+                    and not is_noise_sentence(sentence)
+                    and '/api/' not in sentence
+                    and sentence.count('◦') + sentence.count('•') < 2):
+                clean_sentences.append(sentence)
+            if len(clean_sentences) >= 3:
+                break
 
-        if best_fallback:
-            return best_fallback
+        if clean_sentences:
+            return ' '.join(clean_sentences)
         return "I found related content but could not extract a clear answer. Please try rephrasing your question."
+
+    # For summary/list questions return top 5 sentences
+    question_lower = question.lower()
+    is_summary = any(t in question_lower for t in [
+        'conclude', 'summarize', 'list', 'milestones',
+        'overview', 'all', 'timeline', 'steps', 'references'
+    ])
+
+    top_count = 5 if is_summary else 3
+    top_sentences = [s for _, s in scored[:top_count]]
+
+    # Restore original order
+    original_order = []
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if sentence in top_sentences:
+            original_order.append(sentence)
+            if len(original_order) == len(top_sentences):
+                break
+
+    answer = ' '.join(original_order) if original_order else ' '.join(top_sentences)
+    return answer
 
     # Take top 3 sentences
     top_sentences = [s for _, s in scored[:3]]
@@ -266,12 +281,13 @@ def save_query_to_db(user, question, answer, chunks):
 
 def answer_question(question, user=None):
     """
-    Main Q&A pipeline with Hugging Face QA model:
-    1. Search relevant chunks via FAISS
-    2. Build context
-    3. Try HuggingFace QA model for precise answer
-    4. Fall back to extractive scoring if model fails
-    5. Return structured response
+    Full RAG pipeline with Flan-T5 generative model:
+    1. Semantic search via FAISS
+    2. Filter noisy chunks
+    3. Build context
+    4. Generate answer with Flan-T5
+    5. Fall back to extractive if model fails
+    6. Return structured response
     """
     if not question or not question.strip():
         return {
@@ -282,8 +298,8 @@ def answer_question(question, user=None):
 
     print(f"\nProcessing: {question}")
 
-    # Step 1: Semantic search
-    chunks = search_similar_chunks(question, top_k=5)
+    # Step 1: Semantic search — retrieve more chunks
+    chunks = search_similar_chunks(question, top_k=10)
 
     if not chunks:
         return {
@@ -292,25 +308,45 @@ def answer_question(question, user=None):
             "sources": [],
         }
 
-    # Step 2: Build context
-    context = build_context(chunks, max_words=400)
+    # Step 2: Filter noisy chunks
+    import re as _re
+    def is_usable(text):
+        if len(text.split()) < 25:
+            return False
+        if 'table of content' in text.lower():
+            return False
+        if _re.search(r'\.{2,}\s*\d+', text):
+            return False
+        bullet_count = text.count('◦') + text.count('•') + text.count('▪')
+        if bullet_count > 5:
+            return False
+        return True
 
-    # Step 3: Build sources
-    sources_data, chunks_for_db = build_sources(chunks)
+    usable_chunks = [c for c in chunks if is_usable(c['text'])]
 
-    # Step 4: Try HuggingFace QA model
-    print("Running QA model...")
+    # Fall back to all chunks if filtering removes too many
+    if len(usable_chunks) < 2:
+        usable_chunks = chunks
+
+    # Step 3: Build context from best chunks
+    context = build_context(usable_chunks, max_words=500)
+
+    # Step 4: Build sources
+    sources_data, chunks_for_db = build_sources(usable_chunks)
+
+    # Step 5: Try Flan-T5 generative model
+    print("Running Flan-T5...")
     from .llm import generate_answer_with_model
     answer = generate_answer_with_model(question, context)
 
     if answer:
-        print(f"✅ Model answered: {answer[:100]}")
+        print(f"✅ Flan-T5 answered!")
     else:
-        # Step 5: Fall back to extractive answer
-        print("⚠️ Model fallback to extractive answer...")
+        # Step 6: Fall back to improved extractive
+        print("⚠️ Flan-T5 fallback to extractive...")
         answer = extract_answer(question, context)
 
-    # Step 6: Save to DB
+    # Step 7: Save to DB
     if user:
         save_query_to_db(user, question, answer, chunks_for_db)
 

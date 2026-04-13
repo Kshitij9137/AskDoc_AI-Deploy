@@ -1,167 +1,136 @@
-from transformers import AutoTokenizer, AutoModelForQuestionAnswering
-import torch
 import re
+import torch
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
-print("Loading QA model...")
-MODEL_NAME = "deepset/roberta-base-squad2"
+# ── Load Flan-T5 Large ─────────────────────────
+# First run downloads ~3GB — be patient!
+MODEL_NAME = "google/flan-t5-large"
+
+print("Loading Flan-T5 generative model...")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-model = AutoModelForQuestionAnswering.from_pretrained(MODEL_NAME)
-print("QA model loaded! ✅")
+model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_NAME)
+model.eval()
+print("Flan-T5 loaded! ✅")
 
 
-def clean_for_model(text):
+def clean_context(text):
     """
-    Aggressively clean text before sending to QA model.
+    Clean context before sending to generative model.
+    Remove bullet symbols, API paths, and short noise lines.
     """
-    # Remove bullet points and special chars
-    text = re.sub(r'[◦▪•●▸▹►◆▷]', '', text)
+    text = re.sub(r'[◦▪•●▸▹►◆▷]', ' ', text)
+    text = re.sub(r'(POST|GET|PUT|DELETE)\s+/api/\S+', '', text)
+    text = re.sub(r'Page No\.\s*\S+', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'CCET\s+IPS', '', text, flags=re.IGNORECASE)
 
-    # Remove lines starting with POST/GET API paths
     lines = text.split('\n')
-    clean_lines = []
+    clean = []
     for line in lines:
         line = line.strip()
         if not line:
             continue
-        # Skip API endpoint lines
-        if re.match(r'^(POST|GET|PUT|DELETE)\s+/api', line):
-            continue
-        # Skip lines that are mostly symbols
-        if len(re.findall(r'[a-zA-Z]', line)) < len(line) * 0.3:
-            continue
-        # Skip very short lines
         if len(line.split()) < 4:
             continue
-        clean_lines.append(line)
+        if re.match(r'^[\d\s\.\-]+$', line):
+            continue
+        clean.append(line)
 
-    text = ' '.join(clean_lines)
-
-    # Clean up extra whitespace
-    text = re.sub(r'\s+', ' ', text)
-
-    return text.strip()
-
-
-def score_sentence_with_model(question, sentence):
-    """
-    Use the QA model to score how well a sentence
-    answers the question. Returns confidence score.
-    """
-    try:
-        inputs = tokenizer(
-            question,
-            sentence,
-            return_tensors="pt",
-            truncation=True,
-            max_length=512,
-            padding=True
-        )
-
-        with torch.no_grad():
-            outputs = model(**inputs)
-
-        # Get the best answer span
-        start = torch.argmax(outputs.start_logits)
-        end = torch.argmax(outputs.end_logits) + 1
-
-        if end <= start:
-            end = start + 1
-
-        # Decode answer
-        tokens = inputs["input_ids"][0][start:end]
-        answer = tokenizer.decode(tokens, skip_special_tokens=True).strip()
-
-        # Calculate confidence
-        start_prob = torch.softmax(
-            outputs.start_logits, dim=1
-        )[0][start].item()
-        end_prob = torch.softmax(
-            outputs.end_logits, dim=1
-        )[0][end-1].item()
-        confidence = (start_prob + end_prob) / 2
-
-        return answer, confidence
-
-    except Exception:
-        return "", 0.0
+    text = ' '.join(clean)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
 
 
 def generate_answer_with_model(question, context):
     """
-    Improved approach:
-    1. Split context into clean sentences
-    2. Score each sentence using the QA model
-    3. Return the answer from the highest scoring sentence
+    Flan-T5 with corrected prompt format.
+    Flan-T5 works best with simple direct instructions,
+    not complex multi-line prompts.
     """
     try:
+        context = clean_context(context)
+
         if not context or not question:
             return None
 
-        # Clean the context
-        context = clean_for_model(context)
+        # Trim context
+        words = context.split()
+        if len(words) > 400:
+            context = ' '.join(words[:400])
 
-        # Split into sentences
-        sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', context)
+        # ✅ Flan-T5 works best with this simple format
+        prompt = f"answer the question from the context. context: {context} question: {question}"
 
-        # Filter sentences
-        good_sentences = []
-        for s in sentences:
-            s = s.strip()
-            word_count = len(s.split())
-            # Keep sentences with 8-100 words
-            if 8 <= word_count <= 100:
-                good_sentences.append(s)
+        inputs = tokenizer(
+            prompt,
+            return_tensors="pt",
+            truncation=True,
+            max_length=512
+        )
 
-        if not good_sentences:
-            return None
-
-        # Score each sentence with the model
-        best_answer = None
-        best_score = 0.0
-        best_sentence = None
-
-        for sentence in good_sentences[:10]:
-            answer, score = score_sentence_with_model(
-                question, sentence
+        with torch.no_grad():
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=150,
+                num_beams=4,
+                early_stopping=True,
+                no_repeat_ngram_size=2,
             )
 
-            # ✅ Fix 1: Remove question text from answer
-            # Sometimes model includes the question in answer
-            if answer.lower().startswith(question.lower()[:20].lower()):
-                answer = answer[len(question):].strip()
+        answer = tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
 
-            # ✅ Fix 2: Skip very short or ToC-like answers
-            if re.match(r'^.*\bxi\b|\bxv\b|\bvii\b|\bviii\b', answer):
-                continue
+        print(f"Flan-T5 raw answer: {answer[:120]}")
 
-            if score > best_score and len(answer) > 3:
-                best_score = score
-                best_answer = answer
-                best_sentence = sentence
+        # Reject bad answers
+        bad_responses = [
+            'document does not contain',
+            'document does not provide',
+            'not mentioned',
+            'not provided',
+            'no information',
+            'cannot answer',
+            'i don\'t know',
+            'not found',
+        ]
 
-        print(f"Best score: {best_score:.3f}")
+        answer_lower = answer.lower()
+        if any(bad in answer_lower for bad in bad_responses):
+            print("Flan-T5 said not found — trying shorter context...")
 
-        # If model found a good short answer return full sentence
-        if best_answer and best_score > 0.1 and len(best_answer.split()) >= 3:
-            if len(best_answer.split()) < 6 and best_sentence:
-                # ✅ Fix 3: Clean the sentence before returning
-                clean = best_sentence
-                # Remove question prefix if present
-                q_prefix = question.lower()[:15]
-                if clean.lower().startswith(q_prefix):
-                    clean = clean[len(question):].strip()
-                return clean
-            return best_answer
+            # Try again with first 200 words only
+            short_context = ' '.join(words[:200])
+            short_prompt = f"answer the question from the context. context: {short_context} question: {question}"
 
-        if best_sentence and best_score > 0.05:
-            clean = best_sentence
-            q_prefix = question.lower()[:15]
-            if clean.lower().startswith(q_prefix):
-                clean = clean[len(question):].strip()
-            return clean
+            short_inputs = tokenizer(
+                short_prompt,
+                return_tensors="pt",
+                truncation=True,
+                max_length=512
+            )
+
+            with torch.no_grad():
+                short_outputs = model.generate(
+                    **short_inputs,
+                    max_new_tokens=150,
+                    num_beams=4,
+                    early_stopping=True,
+                )
+
+            answer = tokenizer.decode(
+                short_outputs[0], skip_special_tokens=True
+            ).strip()
+
+            print(f"Flan-T5 retry answer: {answer[:120]}")
+
+            # If still bad, give up
+            if any(bad in answer.lower() for bad in bad_responses):
+                return None
+
+        # Validate final answer
+        if answer and len(answer.split()) >= 3:
+            return answer
 
         return None
 
     except Exception as e:
-        print(f"QA model error: {e}")
+        print(f"Flan-T5 error: {e}")
         return None

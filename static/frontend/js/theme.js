@@ -1,39 +1,48 @@
-/* ═══════════════════════════════════════════════
-   AskDocs AI — Theme Toggle
-   Saves preference to localStorage
-   Applies on page load instantly (no flash)
-═══════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════
+   AskDocs AI — Theme System
+   Cycles: dark → light → rose → dark
+   Persists via localStorage, no flash on load
+═══════════════════════════════════════════════════════ */
 
+// Apply immediately before render (prevents flash)
 (function () {
-    // Apply saved theme immediately on load
-    // This runs before the page renders to prevent flash
     const saved = localStorage.getItem('askdocs_theme') || 'dark';
     document.documentElement.setAttribute('data-theme', saved);
 })();
 
+const THEMES = ['dark', 'light', 'rose'];
+
+const THEME_META = {
+    dark:  { label: 'Switch to Light',  next: 'light' },
+    light: { label: 'Switch to Rose',   next: 'rose'  },
+    rose:  { label: 'Switch to Dark',   next: 'dark'  },
+};
+
 function toggleTheme() {
     const html = document.documentElement;
     const current = html.getAttribute('data-theme') || 'dark';
-    const next = current === 'dark' ? 'light' : 'dark';
+    const idx = THEMES.indexOf(current);
+    const next = THEMES[(idx + 1) % THEMES.length];
 
-    // Apply theme
+    // Apply
     html.setAttribute('data-theme', next);
-
-    // Save preference
     localStorage.setItem('askdocs_theme', next);
 
-    // Update canvas dot color if canvas exists
-    updateCanvasDots(next);
+    // Update button tooltip
+    updateThemeButton(next);
 
-    console.log(`Theme switched to: ${next}`);
+    console.log(`Theme → ${next}`);
 }
 
-function updateCanvasDots(theme) {
-    // The canvas animation reads CSS variables
-    // We just need to signal it to refresh
-    const canvas = document.getElementById('bgCanvas');
-    if (canvas) {
-        // Dispatch custom event so canvas can update
-        canvas.dispatchEvent(new CustomEvent('themechange', { detail: { theme } }));
-    }
+function updateThemeButton(theme) {
+    const btn = document.querySelector('.theme-toggle');
+    if (!btn) return;
+    const meta = THEME_META[theme];
+    if (meta) btn.title = meta.label;
 }
+
+// Set correct tooltip on load
+document.addEventListener('DOMContentLoaded', () => {
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    updateThemeButton(current);
+});

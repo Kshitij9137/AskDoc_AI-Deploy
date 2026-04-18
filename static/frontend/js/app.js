@@ -188,7 +188,11 @@ function appendAIMessage(answer, sources) {
     // Build sources HTML
     let sourcesHtml = '';
     if (sources && sources.length > 0) {
-        const sourceItems = sources.map(s => `
+        // Show only top 3 sources in UI
+        // (backend still uses all sources for answer quality)
+        const topSources = sources.slice(0, 3);
+
+        const sourceItems = topSources.map(s => `
             <div class="source-item">
                 📄 <span>${escapeHtml(s.document)}</span>
                 — Page ${s.page}

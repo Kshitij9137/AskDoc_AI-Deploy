@@ -1,7 +1,7 @@
 import os
 
-project_dir = r"D:\PROJECTS\askdocs-ai\static\frontend"  # change this
-output_file = "project_code_frontend.txt"
+project_dir = r"D:\PROJECTS\askdocs-ai"  # change this
+output_file = "project_code.txt"
 
 # Only include meaningful code files
 include_extensions = {

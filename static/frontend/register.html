@@ -7,6 +7,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+    <!-- Theme must load FIRST to prevent flash -->
+    <script src="/js/theme.js"></script>
+    <link rel="stylesheet" href="/css/theme.css">
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body class="auth-body">
@@ -108,6 +111,26 @@
                 <div class="auth-divider"><span>Already have an account?</span></div>
 
                 <a href="/login" class="btn-secondary-auth">Sign in instead</a>
+
+                <!-- Theme toggle on login page -->
+                <button class="theme-toggle auth-theme-btn" onclick="toggleTheme()" title="Toggle theme">
+                    <svg class="icon-sun" width="15" height="15" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.5"/>
+                        <path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                    <svg class="icon-moon" width="15" height="15" viewBox="0 0 24 24" fill="none">
+                        <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                    <svg class="icon-rose" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <path d="M12 2C8 2 5 5 5 8c0 4 4 7 7 10 3-3 7-6 7-10 0-3-3-6-7-6z" fill="url(#rg2)"/>
+                        <defs>
+                            <linearGradient id="rg2" x1="5" y1="2" x2="19" y2="18">
+                                <stop stop-color="#f43f5e"/>
+                                <stop offset="1" stop-color="#fb923c"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </button>
             </div>
         </div>
     </div>

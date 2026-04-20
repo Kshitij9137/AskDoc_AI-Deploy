@@ -8,8 +8,7 @@
 /* ══════════════════════════════
    DARK MODE
 ══════════════════════════════ */
-:root,
-[data-theme="dark"] {
+html[data-theme="dark"] {
     --void:         #05050a;
     --obsidian:     #090910;
     --deep:         #0d0d18;
@@ -31,6 +30,10 @@
     --indigo:       #6366f1;
     --indigo-dim:   rgba(99,102,241,0.12);
     --violet:       #8b5cf6;
+    --accent:       #6366f1;
+    --accent-light: #818cf8;
+    --accent-dim:   rgba(99,102,241,0.15);
+    --accent-glow:  rgba(99,102,241,0.3);
     --t1:           #f1f1fa;
     --t2:           #8888aa;
     --t3:           #45455a;
@@ -59,7 +62,7 @@
 /* ══════════════════════════════
    LIGHT MODE
 ══════════════════════════════ */
-[data-theme="light"] {
+html[data-theme="light"] {
     --void:         #f0f3fb;
     --obsidian:     #e9edf8;
     --deep:         #e2e7f5;
@@ -81,6 +84,10 @@
     --indigo:       #4f46e5;
     --indigo-dim:   rgba(79,70,229,0.10);
     --violet:       #7c3aed;
+    --accent:       #4f46e5;
+    --accent-light: #6366f1;
+    --accent-dim:   rgba(79,70,229,0.10);
+    --accent-glow:  rgba(79,70,229,0.2);
     --t1:           #0d0d1a;
     --t2:           #4a4a6a;
     --t3:           #9090b0;
@@ -110,7 +117,7 @@
    ROSE MODE — Enhanced to match screenshot
    Soft blush · Glass · Grid background
 ══════════════════════════════ */
-[data-theme="rose"] {
+html[data-theme="rose"] {
     /* Backgrounds — soft blush tones */
     --void:         #fdf2f4;
     --obsidian:     #fce8ec;
@@ -143,6 +150,10 @@
     --indigo:       #f43f5e;
     --indigo-dim:   rgba(244,63,94,0.10);
     --violet:       #fb7185;
+    --accent:       #f43f5e;
+    --accent-light: #fb7185;
+    --accent-dim:   rgba(244,63,94,0.10);
+    --accent-glow:  rgba(244,63,94,0.25);
 
     /* Text */
     --t1:           #3b0a14;

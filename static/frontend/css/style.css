@@ -467,3 +467,28 @@ body {
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Theme toggle on auth pages */
+.auth-theme-btn {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 100;
+    width: 36px;
+    height: 36px;
+    background: var(--surface, rgba(255,255,255,0.1));
+    border: 1px solid var(--line, rgba(255,255,255,0.1));
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: fixed;
+    transition: all 0.2s ease;
+}
+
+.auth-theme-btn:hover {
+    border-color: var(--indigo, #6366f1);
+    background: var(--indigo-dim, rgba(99,102,241,0.12));
+}

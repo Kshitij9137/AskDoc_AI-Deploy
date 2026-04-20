@@ -5,8 +5,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from .models import Document, ExtractedText, DocumentChunk
 from .serializers import DocumentUploadSerializer, DocumentListSerializer
 from .processor import process_document
-from rest_framework import generics, permissions, status
-from rest_framework.response import Response
+
 
 
 class DocumentUploadView(APIView):

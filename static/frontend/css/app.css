@@ -211,6 +211,28 @@ body {
     transition: all 0.3s ease;
 }
 
+/* ── Clear history button ───────────────────── */
+.clear-history-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    color: var(--t3);
+    font-size: 10px;
+    font-family: var(--font);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.clear-history-btn:hover {
+    border-color: rgba(248,113,113,0.3);
+    color: var(--red);
+    background: rgba(248,113,113,0.06);
+}
+
 .doc-list, .history-list {
     overflow-y: auto;
     padding: 4px 8px;

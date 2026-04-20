@@ -220,6 +220,21 @@ def answer_question(question, user=None):
             "sources": [],
         }
 
+    # ✅ FILTER CHUNKS BY USER — only show results from user's own documents
+    if user:
+        from documents.models import Document
+        user_doc_ids = set(
+            Document.objects.filter(owner=user).values_list('id', flat=True)
+        )
+        chunks = [c for c in chunks if c['document_id'] in user_doc_ids]
+
+    if not chunks:
+        return {
+            "question": question,
+            "answer": "No relevant documents found in your library. Please upload your own documents first.",
+            "sources": [],
+        }
+
     # Step 2: Filter obvious noise
     usable_chunks = [c for c in chunks if is_usable_chunk(c['text'])]
     if len(usable_chunks) < 2:
@@ -252,11 +267,6 @@ def answer_question(question, user=None):
     if user:
         save_query_to_db(user, question, answer, chunks_for_db)
 
-    if "reference" in question.lower():
-        # Boost chunks that explicitly contain "reference" or "bibliography"
-        for chunk in usable_chunks:
-            if re.search(r'\breferences?\b|\bbibliography\b', chunk['text'], re.I):
-                chunk['score_boost'] = 1.5   # use during reranking
 
     return {
         "question": question,

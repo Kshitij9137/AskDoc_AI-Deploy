@@ -139,6 +139,13 @@
         <div class="sidebar-block sidebar-block--flex">
           <div class="sidebar-block-header">
             <span class="sidebar-label">History</span>
+            <button class="clear-history-btn" onclick="clearHistory()" title="Clear all history">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+                    <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="currentColor"
+                          stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Clear
+            </button>
           </div>
           <div class="history-list" id="historyList">
             <div class="sidebar-empty">
@@ -497,15 +504,15 @@
           <div class="progress-track" id="uploadProgress" style="display: none">
             <div class="progress-step" id="step1">
               <div class="step-bullet"><span class="step-icon">○</span></div>
-              <span class="step-label">Uploading file</span>
+              <span class="step-label">Uploading to server</span>
             </div>
             <div class="progress-step" id="step2">
               <div class="step-bullet"><span class="step-icon">○</span></div>
-              <span class="step-label">Extracting text</span>
+              <span class="step-label">Extracting & chunking text</span>
             </div>
             <div class="progress-step" id="step3">
               <div class="step-bullet"><span class="step-icon">○</span></div>
-              <span class="step-label">Generating embeddings</span>
+              <span class="step-label">Generating AI embeddings</span>
             </div>
             <div class="progress-step" id="step4">
               <div class="step-bullet"><span class="step-icon">○</span></div>

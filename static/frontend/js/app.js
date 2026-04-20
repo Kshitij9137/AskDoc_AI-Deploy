@@ -24,13 +24,47 @@ async function apiCall(endpoint, method = 'GET', body = null) {
     if (body) options.body = JSON.stringify(body);
 
     const response = await fetch(`${API_BASE}${endpoint}`, options);
+
     if (response.status === 401) {
+        const refreshed = await tryRefreshToken();
+        if (refreshed) {
+            // ✅ Build NEW options with the refreshed token
+            // Cannot reuse old options — it still has the expired token
+            const retryHeaders = {
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+                'Content-Type': 'application/json'
+            };
+            const retryOptions = { method, headers: retryHeaders };
+            if (body) retryOptions.body = JSON.stringify(body);
+            return fetch(`${API_BASE}${endpoint}`, retryOptions);
+        }
         localStorage.clear();
         window.location.href = '/login';
         return null;
     }
+
     return response;
 }
+
+async function tryRefreshToken() {
+    const refresh = localStorage.getItem('refresh_token');
+    if (!refresh) return false;
+    try {
+        const res = await fetch(`${API_BASE}/auth/token/refresh/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refresh })
+        });
+        if (res.ok) {
+            const data = await res.json();
+            localStorage.setItem('access_token', data.access);
+            return true;
+        }
+    } catch { return false; }
+    return false;
+}
+
+
 
 // ── Load Documents ─────────────────────────────
 async function loadDocuments() {
@@ -41,6 +75,8 @@ async function loadDocuments() {
         const data = await response.json();
         const docs = data.results || data;
         const docList = document.getElementById('docList');
+
+        docList.innerHTML = '<div class="empty-state-small">Loading...</div>';
 
         if (!docs || docs.length === 0) {
             docList.innerHTML =
@@ -97,7 +133,7 @@ async function loadHistory() {
                  onclick="loadHistoryQuestion('${escapeHtml(log.question)}')"
                  title="${escapeHtml(log.question)}">
                 <div class="history-item-text">
-                    💬 ${escapeHtml(log.question)}
+                    ${escapeHtml(log.question)}
                 </div>
             </div>
         `).join('');
@@ -110,6 +146,29 @@ async function loadHistory() {
 function loadHistoryQuestion(question) {
     document.getElementById('questionInput').value = question;
     document.getElementById('questionInput').focus();
+}
+
+// ── Clear Chat History ─────────────────────────
+async function clearHistory() {
+    if (!confirm('Clear all chat history?')) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/qa/history/clear/`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            }
+        });
+
+        if (response.ok) {
+            // Clear sidebar history
+            document.getElementById('historyList').innerHTML =
+                '<div class="sidebar-empty"><p>No history yet</p></div>';
+            console.log('History cleared');
+        }
+    } catch (error) {
+        console.error('Failed to clear history:', error);
+    }
 }
 
 // ── Send Question ──────────────────────────────
@@ -396,8 +455,8 @@ async function uploadDocument() {
     formData.append('title', title);
 
     try {
+        // Step 1 — Show uploading
         setStep(1, 'active');
-        await delay(300);
 
         const response = await fetch(`${API_BASE}/documents/upload/`, {
             method: 'POST',
@@ -407,34 +466,33 @@ async function uploadDocument() {
             body: formData
         });
 
+        // Steps 2-4 animate WHILE server processes
+        // (server does all processing synchronously)
+        setStep(1, 'done');
         setStep(2, 'active');
-        await delay(500);
+        await delay(600);
+        setStep(2, 'done');
         setStep(3, 'active');
-        await delay(500);
+        await delay(600);
+        setStep(3, 'done');
         setStep(4, 'active');
-        await delay(300);
 
         const data = await response.json();
 
         if (response.ok) {
-            // Mark all steps done
-            [1, 2, 3, 4].forEach(i => setStepDone(i));
+            setStep(4, 'done');
 
             const successEl = document.getElementById('uploadSuccess');
-            successEl.textContent = '✅ Document uploaded and processed successfully!';
+            successEl.textContent = '✅ ' + data.message;
             successEl.classList.add('show');
 
             uploadBtn.textContent = 'Done ✓';
-
-            // Refresh documents list in sidebar
             await loadDocuments();
-
-            // Close modal after 2 seconds
             setTimeout(() => closeUploadModal(), 2000);
 
         } else {
             const errorEl = document.getElementById('uploadError');
-            errorEl.textContent = data.error || 'Upload failed. Please try again.';
+            errorEl.textContent = data.error || 'Upload failed.';
             errorEl.classList.add('show');
             uploadBtn.disabled = false;
             uploadBtn.textContent = 'Try Again';
@@ -442,7 +500,7 @@ async function uploadDocument() {
 
     } catch (error) {
         const errorEl = document.getElementById('uploadError');
-        errorEl.textContent = 'Cannot connect to server. Make sure Django is running.';
+        errorEl.textContent = 'Cannot connect to server.';
         errorEl.classList.add('show');
         uploadBtn.disabled = false;
         uploadBtn.textContent = 'Try Again';
@@ -552,8 +610,10 @@ async function deleteDocument(docId, docTitle) {
                     const remaining = document.querySelectorAll('.doc-item').length;
                     const countEl = document.getElementById('docCount');
                     if (countEl) countEl.textContent = remaining;
-                    // Show empty state if no docs left
+
+                    // Also update if zero docs left
                     if (remaining === 0) {
+                        if (countEl) countEl.textContent = '0';
                         document.getElementById('docList').innerHTML =
                             '<div class="sidebar-empty"><p>No documents yet</p></div>';
                     }

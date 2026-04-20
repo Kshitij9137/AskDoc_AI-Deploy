@@ -1,0 +1,16 @@
+# Virtual environment
+venv/
+env/
+
+# Large files
+project_code.txt
+*.dll
+*.so
+
+# Django
+*.pyc
+__pycache__/
+db.sqlite3
+media/
+*.egg-info/
+.env

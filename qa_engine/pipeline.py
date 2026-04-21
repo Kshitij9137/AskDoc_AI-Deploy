@@ -73,6 +73,10 @@ def score_sentence(sentence, keywords):
 
 
 def build_context(chunks, max_words=600):
+    """
+    Combine top chunks into a single context string.
+    Limited to max_words to stay within Groq token budget.
+    """
     context_parts = []
     total_words = 0
     for chunk in chunks:
@@ -85,11 +89,17 @@ def build_context(chunks, max_words=600):
 
 
 def extract_answer(question, context):
+    """
+    Extractive fallback when Groq is unavailable.
+    Scores sentences by keyword overlap with the question.
+    """
     if not context:
         return "I could not find relevant information to answer your question."
+
     keywords = get_question_keywords(question)
     sentences = re.split(r'(?<=[.!?])\s+', context)
     scored = []
+
     for sentence in sentences:
         sentence = sentence.strip()
         if len(sentence.split()) < 6:
@@ -99,7 +109,9 @@ def extract_answer(question, context):
         score = score_sentence(sentence, keywords)
         if score > 0:
             scored.append((score, sentence))
+
     scored.sort(key=lambda x: x[0], reverse=True)
+
     if not scored:
         clean_sentences = []
         for sentence in sentences:
@@ -114,13 +126,16 @@ def extract_answer(question, context):
         if clean_sentences:
             return ' '.join(clean_sentences)
         return "I found related content but could not extract a clear answer."
+
     question_lower = question.lower()
     is_summary = any(t in question_lower for t in [
         'conclude', 'summarize', 'list', 'milestones',
         'overview', 'all', 'timeline', 'steps', 'references'
     ])
+
     top_count = 5 if is_summary else 3
     top_sentences = [s for _, s in scored[:top_count]]
+
     original_order = []
     for sentence in sentences:
         sentence = sentence.strip()
@@ -128,14 +143,19 @@ def extract_answer(question, context):
             original_order.append(sentence)
             if len(original_order) == len(top_sentences):
                 break
+
     answer = ' '.join(original_order) if original_order else ' '.join(top_sentences)
     return answer
 
 
 def build_sources(chunks):
+    """
+    Build deduplicated source list from chunks.
+    """
     seen = set()
     sources_data = []
     chunks_for_db = []
+
     for chunk in chunks:
         key = (chunk['document_title'], chunk['page_number'])
         if key not in seen:
@@ -146,13 +166,23 @@ def build_sources(chunks):
                 'page': chunk['page_number']
             })
         chunks_for_db.append(chunk)
+
     return sources_data, chunks_for_db
 
 
 def save_query_to_db(user, question, answer, chunks):
+    """
+    Persist question, answer and sources to database.
+    """
     from .models import QueryLog, QuerySource
     from documents.models import Document
-    query_log = QueryLog.objects.create(user=user, question=question, answer=answer)
+
+    query_log = QueryLog.objects.create(
+        user=user,
+        question=question,
+        answer=answer
+    )
+
     seen = set()
     for chunk in chunks:
         key = (chunk['document_id'], chunk['page_number'])
@@ -169,38 +199,64 @@ def save_query_to_db(user, question, answer, chunks):
             )
         except Document.DoesNotExist:
             continue
+
     return query_log
 
 
 def is_usable_chunk(text):
+    """
+    Filter out chunks that are noise or too short.
+    """
     text_lower = text.lower()
+
     if len(text.split()) < 25:
         return False
-    noise_keywords = ['table of content', 'page no.', 'ccet', 'submitted by', 'enrolment']
+
+    noise_keywords = [
+        'table of content', 'page no.', 'ccet',
+        'submitted by', 'enrolment'
+    ]
     if any(n in text_lower for n in noise_keywords):
         return False
+
     bullet_count = text.count('◦') + text.count('•') + text.count('▪')
     if bullet_count > 4:
         return False
+
     if text.count('.') > 30 and len(text) < 200:
         return False
-    if re.match(r'^[A-Z][a-z]+\s+[A-Z][a-z]+$', text.strip()):
-        return False
+
     return True
 
 
 def rerank_chunks(question, chunks, top_k=5):
-    """Re‑rank chunks using a cross‑encoder for better relevance."""
+    """
+    Re-rank chunks using cross-encoder for better relevance.
+    Much more accurate than FAISS alone.
+    """
     if not chunks:
         return []
+
     pairs = [(question, chunk['text']) for chunk in chunks]
     scores = reranker.predict(pairs)
-    # Sort by score descending
+
     ranked = sorted(zip(chunks, scores), key=lambda x: x[1], reverse=True)
     return [chunk for chunk, _ in ranked[:top_k]]
 
 
 def answer_question(question, user=None):
+    """
+    Full RAG pipeline:
+    1.  Semantic search via FAISS (top 15)
+    2.  Filter by user ownership
+    3.  Filter noisy chunks
+    4.  Rerank with cross-encoder (top 8)
+    5.  Build context (max 600 words)
+    6.  Generate answer with Groq Llama3
+    7.  Fall back to extractive if Groq fails
+    8.  Save to database
+    9.  Return structured response
+    """
     if not question or not question.strip():
         return {
             "question": question,
@@ -210,8 +266,9 @@ def answer_question(question, user=None):
 
     print(f"\nProcessing: {question}")
 
-    # Step 1: Retrieve top 20 chunks
-    chunks = search_similar_chunks(question, top_k=30)
+    # ── Step 1: Semantic search ────────────────────
+    # Reduced from 30 to 15 — avoids irrelevant chunks
+    chunks = search_similar_chunks(question, top_k=15)
 
     if not chunks:
         return {
@@ -220,7 +277,8 @@ def answer_question(question, user=None):
             "sources": [],
         }
 
-    # ✅ FILTER CHUNKS BY USER — only show results from user's own documents
+    # ── Step 2: Filter by user ─────────────────────
+    # Only return results from the logged-in user's documents
     if user:
         from documents.models import Document
         user_doc_ids = set(
@@ -231,43 +289,48 @@ def answer_question(question, user=None):
     if not chunks:
         return {
             "question": question,
-            "answer": "No relevant documents found in your library. Please upload your own documents first.",
+            "answer": (
+                "No relevant documents found in your library. "
+                "Please upload your own documents first."
+            ),
             "sources": [],
         }
 
-    # Step 2: Filter obvious noise
+    # ── Step 3: Filter noisy chunks ────────────────
     usable_chunks = [c for c in chunks if is_usable_chunk(c['text'])]
     if len(usable_chunks) < 2:
         usable_chunks = chunks[:5]
 
-    # Step 3: Rerank with cross‑encoder (top 5)
+    # ── Step 4: Rerank with cross-encoder ──────────
     print(f"Reranking {len(usable_chunks)} chunks...")
     best_chunks = rerank_chunks(question, usable_chunks, top_k=8)
     print(f"Selected top {len(best_chunks)} chunks after reranking.")
 
-    # Step 4: Build context
-    context = build_context(best_chunks, max_words=800)
-    print(f"Context length: {len(context.split())} words")
+    # ── Step 5: Build context ──────────────────────
+    # 600 words fits comfortably within Groq's token budget
+    context = build_context(best_chunks, max_words=600)
+    print(f"Context: {len(context.split())} words")
 
-    # Step 5: Build sources
+    # ── Step 6: Build sources ──────────────────────
     sources_data, chunks_for_db = build_sources(best_chunks)
 
-    # Step 6: Generate answer with Flan‑T5
-    print("Running Flan-T5...")
+    # ── Step 7: Generate answer with Groq ──────────
+    print("Asking Groq AI...")
     from .llm import generate_answer_with_model
     answer = generate_answer_with_model(question, context)
 
     if answer is not None:
-        print(f"✅ Flan-T5 answered: {answer[:100]}")
+        print(f"✅ Groq answered: {answer[:100]}")
     else:
-        print("⚠️ Flan-T5 failed, using extractive fallback...")
+        # Groq unavailable — use extractive fallback
+        print("⚠️ Groq unavailable — using extractive fallback...")
         answer = extract_answer(question, context)
 
-    # Step 7: Save to DB
+    # ── Step 8: Save to database ───────────────────
     if user:
         save_query_to_db(user, question, answer, chunks_for_db)
 
-
+    # ── Step 9: Return response ────────────────────
     return {
         "question": question,
         "answer": answer,

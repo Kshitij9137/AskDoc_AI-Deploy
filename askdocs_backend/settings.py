@@ -29,7 +29,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+# askdocs_backend/settings.py
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'askdoc-ai-deploy.onrender.com']
 
 
 # Application definition

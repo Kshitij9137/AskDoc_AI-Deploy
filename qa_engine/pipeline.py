@@ -1,11 +1,7 @@
 import re
 from .searcher import search_similar_chunks
-from sentence_transformers import CrossEncoder
 
-# ── Load cross-encoder for reranking ─────────────
-print("Loading cross-encoder for reranking...")
-reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
-print("Cross-encoder loaded! ✅")
+
 
 # ── Noise filters ──────────────────────────────
 NOISE_PHRASES = [
@@ -233,9 +229,16 @@ def rerank_chunks(question, chunks, top_k=5):
     """
     Re-rank chunks using cross-encoder for better relevance.
     Much more accurate than FAISS alone.
+    Lazy-loads model on first call to save startup memory.
     """
     if not chunks:
         return []
+
+    # Lazy-load reranker only when first question is asked
+    from sentence_transformers import CrossEncoder
+    print("Loading cross-encoder for reranking...")
+    reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+    print("Cross-encoder loaded! ✅")
 
     pairs = [(question, chunk['text']) for chunk in chunks]
     scores = reranker.predict(pairs)

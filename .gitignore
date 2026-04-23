@@ -20,3 +20,12 @@ faiss_index/
 *.egg-info/
 .env
 staticfiles/
+
+
+# IDE
+.vscode/
+.idea/
+
+# Test files
+test_qa.py
+export_code.py

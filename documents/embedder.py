@@ -1,6 +1,5 @@
 import json
 import os
-from sentence_transformers import SentenceTransformer
 from .models import DocumentChunk, ChunkEmbedding
 
 # Tell HuggingFace to use cached model only
@@ -14,6 +13,8 @@ def _get_model():
     """Lazy-load the sentence transformer model on first use."""
     global _model
     if _model is None:
+        # Import INSIDE function to delay torch loading
+        from sentence_transformers import SentenceTransformer
         print("Loading sentence transformer model...")
         _model = SentenceTransformer('all-MiniLM-L6-v2')
         print("Model loaded successfully!")

@@ -216,7 +216,7 @@ async function sendQuestion() {
 
     } catch (error) {
         removeTypingIndicator(typingId);
-        appendErrorMessage('Cannot connect to server. Make sure Django is running.');
+        appendErrorMessage('Server is starting up. Please wait 30 seconds and try again.');
     } finally {
         sendBtn.disabled = false;
     }
@@ -458,13 +458,19 @@ async function uploadDocument() {
         // Step 1 — Show uploading
         setStep(1, 'active');
 
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 min timeout
+
         const response = await fetch(`${API_BASE}/documents/upload/`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('access_token')}`
             },
-            body: formData
+            body: formData,
+            signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
 
         // Steps 2-4 animate WHILE server processes
         // (server does all processing synchronously)
@@ -498,9 +504,13 @@ async function uploadDocument() {
             uploadBtn.textContent = 'Try Again';
         }
 
-    } catch (error) {
+    }  catch (error) {
         const errorEl = document.getElementById('uploadError');
-        errorEl.textContent = 'Cannot connect to server.';
+        if (error.name === 'AbortError') {
+            errorEl.textContent = 'Upload timed out. Server may be waking up — please try again in 30 seconds.';
+        } else {
+            errorEl.textContent = 'Cannot connect to server. Please try again.';
+        }
         errorEl.classList.add('show');
         uploadBtn.disabled = false;
         uploadBtn.textContent = 'Try Again';

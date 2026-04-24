@@ -1,16 +1,14 @@
 import json
 import os
-
-from sentence_transformers import SentenceTransformer
 from .models import DocumentChunk, ChunkEmbedding
 
-# Global model cache (lazy-loaded on first use)
 _model = None
 
 def get_model():
     global _model
     if _model is None:
         print("Loading SentenceTransformer model...")
+        from sentence_transformers import SentenceTransformer  # import here, not at top
         _model = SentenceTransformer('all-MiniLM-L6-v2')
         print("Model loaded successfully!")
     return _model
@@ -39,5 +37,4 @@ def generate_embeddings_for_document(document_id):
 
 
 def get_question_embedding(question_text):
-    vector = get_model().encode(question_text)
-    return vector
+    return get_model().encode(question_text)

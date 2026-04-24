@@ -5,10 +5,8 @@ from .searcher import search_similar_chunks
 
 # ── Noise filters ──────────────────────────────
 NOISE_PHRASES = [
-    'page no', 'ccet ips', 'ccet', 'table of content',
-    'sr. no', 'submitted by', 'batch year', 'enrolment no',
-    'project guide', 'university of allahabad',
-    'institute of professional', 'centre of computer',
+    'page no', 'table of content',
+    'sr. no',
     'prayagraj', 'uttar pradesh', 'master of computer',
     '4th semester', '2024-2026',
 ]

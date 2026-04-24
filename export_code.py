@@ -20,7 +20,7 @@ exclude_files = {
     "package-lock.json", "yarn.lock"
 }
 
-# Max file size (in bytes) -> 200 KB
+# Max file size -> 200 KB
 MAX_FILE_SIZE = 200 * 1024
 
 total_lines = 0

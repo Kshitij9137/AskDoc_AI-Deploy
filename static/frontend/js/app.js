@@ -222,7 +222,7 @@ async function sendQuestion() {
     }
 }
 
-// ── Append User Message ────────────────────────
+// ── Append User Message 
 function appendUserMessage(text) {
     const container = document.getElementById('messagesContainer');
     const initial = username.charAt(0).toUpperCase();
@@ -240,7 +240,7 @@ function appendUserMessage(text) {
     scrollToBottom();
 }
 
-// ── Append AI Message ──────────────────────────
+// ── Append AI Message 
 function appendAIMessage(answer, sources) {
     const container = document.getElementById('messagesContainer');
 

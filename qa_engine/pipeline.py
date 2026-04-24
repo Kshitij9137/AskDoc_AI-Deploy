@@ -270,7 +270,6 @@ def answer_question(question, user=None):
     print(f"\nProcessing: {question}")
 
     # ── Step 1: Semantic search ────────────────────
-    # Reduced from 30 to 15 — avoids irrelevant chunks
     chunks = search_similar_chunks(question, top_k=15)
 
     if not chunks:

@@ -1,0 +1,30 @@
+# Virtual environment
+venv/
+env/
+
+# Large files
+project_code.txt
+*.dll
+*.so
+
+# Django
+*.pyc
+*.pyo
+__pycache__/
+*.sqlite3
+db.sqlite3
+.DS_Store
+Thumbs.db
+media/
+*.egg-info/
+.env
+staticfiles/
+
+
+# IDE
+.vscode/
+.idea/
+
+# Test files
+test_qa.py
+export_code.py

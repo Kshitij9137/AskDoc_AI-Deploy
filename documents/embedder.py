@@ -15,17 +15,20 @@ def get_model():
 
 
 def generate_embeddings_for_document(document_id):
-    chunks = DocumentChunk.objects.filter(document_id=document_id)
+    chunks = list(DocumentChunk.objects.filter(document_id=document_id))
 
-    if not chunks.exists():
+    if not chunks:
         print(f"No chunks found for document {document_id}")
         return False
 
-    print(f"Generating embeddings for {chunks.count()} chunks...")
+    print(f"Generating embeddings for {len(chunks)} chunks...")
     model = get_model()
 
-    for chunk in chunks:
-        vector = model.encode(chunk.text)
+    # Encode ALL chunks in one batch — much faster and lower peak memory
+    texts = [chunk.text for chunk in chunks]
+    vectors = model.encode(texts, batch_size=8, show_progress_bar=False)
+
+    for chunk, vector in zip(chunks, vectors):
         vector_json = json.dumps(vector.tolist())
         ChunkEmbedding.objects.update_or_create(
             chunk=chunk,

@@ -30,14 +30,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 # askdocs_backend/settings.py
-# ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'askdoc-ai-deploy.onrender.com','*']
 ALLOWED_HOSTS = [
-     'askdoc-ai-deploy.onrender.com',
-    "uncaring-scorn-unbaked.ngrok-free.dev",
-    
-    "localhost",
-    "127.0.0.1"
-]
+    'askdoc-ai-deploy.onrender.com',
+   "uncaring-scorn-unbaked.ngrok-free.dev",
+   "localhost",
+   "127.0.0.1"
+ ]
+
 
 # Application definition
 

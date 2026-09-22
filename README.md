@@ -271,10 +271,10 @@ Enrollment: U2449028
 
 ## 🙏 Acknowledgments
 
-- [Groq](https://groq.com) — Free LLM API
+- [Groq](https://groq.com) — LLM API
 - [Facebook FAISS](https://github.com/facebookresearch/faiss) — Vector search
 - [Sentence Transformers](https://www.sbert.net) — Text embeddings
-- [Render](https://render.com) — Free hosting
+- [Render](https://render.com) — Hosting
 
 ---
 
